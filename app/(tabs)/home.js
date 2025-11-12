@@ -57,8 +57,6 @@ const CHEF_CUISINES = [
 
 const RECIPE_SORT_OPTIONS = [
   { label: "Newest", value: "newest" },
-  { label: "Top Rated", value: "topRated" },
-  { label: "Most Liked", value: "mostLiked" },
   { label: "A-Z", value: "alphabetical" },
   { label: "Z-A", value: "alphabeticalReverse" },
 ];
@@ -119,23 +117,6 @@ export default function HomeScreen() {
 
     // Use simpler queries to avoid composite index requirements
     switch (sortBy) {
-      case "topRated":
-        // Fetch all published recipes and filter client-side
-        const q1 = query(
-          recipesRef,
-          where("isPublished", "==", true),
-          orderBy("ratings", "desc"),
-          limit(100)
-        );
-        return setUpRecipeQuery(q1);
-      case "mostLiked":
-        const q2 = query(
-          recipesRef,
-          where("isPublished", "==", true),
-          orderBy("totalLikes", "desc"),
-          limit(100)
-        );
-        return setUpRecipeQuery(q2);
       case "alphabetical":
         const q3 = query(
           recipesRef,
