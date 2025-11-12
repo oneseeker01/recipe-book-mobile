@@ -1,6 +1,9 @@
 import React from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 /**
  * Global AppLayout wrapper component
@@ -22,6 +25,7 @@ export default function AppLayout({
   header = null,
   isList = false,
 }) {
+  const insets = useSafeAreaInsets();
   // When wrapped in a ScrollView we must NOT force the inner container to flex:1
   // because that prevents the ScrollView from measuring content height and
   // makes scrolling behave like a fixed layout. For non-scrollable screens we
@@ -29,6 +33,8 @@ export default function AppLayout({
   const innerBase = {
     backgroundColor,
     paddingTop: hasHeader ? 0 : 8,
+    // Add bottom padding to account for system nav buttons + extra spacing
+    paddingBottom: Math.max(16, insets.bottom + 16),
   };
 
   const containerStyle = [
@@ -41,7 +47,10 @@ export default function AppLayout({
   const content = <View style={containerStyle}>{children}</View>;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={["top", "left", "right", "bottom"]}
+    >
       {/* Render optional fixed header outside the scrollable content */}
       {header}
 
@@ -75,11 +84,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingBottom: 6,
+    paddingBottom: 20, // Increased from 6 to provide more bottom spacing for system nav
   },
   // Container variant used when wrapping inside a ScrollView (no flex:1)
   containerNonFlex: {
     paddingHorizontal: 16,
-    paddingBottom: 6,
+    paddingBottom: 20, // Increased from 6 to provide more bottom spacing for system nav
   },
 });
