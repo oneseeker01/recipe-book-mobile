@@ -1,0 +1,175 @@
+# How to Create Admin Users for Recipe App
+
+## 🚀 Quick Start (Easiest Method)
+
+### Method 1: Firebase Console (Recommended for Production)
+
+1. **Go to Firebase Console**
+
+   - Visit https://console.firebase.google.com
+   - Select your project
+
+2. **Access Firestore Database**
+
+   - Go to "Firestore Database" in the left sidebar
+   - Click on "users" collection
+
+3. **Create Admin User**
+
+   - **Option A**: Edit existing user
+
+     - Find the user document you want to make admin
+     - Add these fields:
+       ```
+       role: "admin"
+       isAdmin: true
+       ```
+
+   - **Option B**: Create new user manually
+     - Click "Add document"
+     - Document ID: Generate a random ID (e.g., `admin-001`)
+     - Add these fields:
+       ```
+       uid: "admin-001"
+       email: "admin@example.com"
+       displayName: "Admin User"
+       role: "admin"
+       isAdmin: true
+       emailVerified: true
+       bio: "Admin user"
+       followers: []
+       followersCount: 0
+       totalRecipes: 0
+       totalLikes: 0
+       averageRating: 0
+       totalReceivedRatings: 0
+       isGuest: false
+       createdAt: {timestamp}
+       updatedAt: {timestamp}
+       ```
+
+4. **Login as Admin**
+   - User can now login normally with the email
+   - They will see "Admin Dashboard" button in their profile
+   - Click the button to access admin features
+
+---
+
+## 🛠️ Development Methods
+
+### Method 2: In-App Admin Creation
+
+1. **Use the admin utility functions** from `lib/admin-setup.js`:
+
+```javascript
+import { makeUserAdmin } from "../lib/admin-setup";
+
+// Make existing user an admin
+await makeUserAdmin("user-uid-here");
+
+// Create new admin user
+import { createAdminInApp } from "../lib/admin-setup";
+await createAdminInApp("new-user-uid", {
+  email: "admin@example.com",
+  displayName: "Admin User",
+});
+```
+
+2. **Add a temporary admin creation screen** (for development only)
+
+### Method 3: Node.js Script
+
+1. **Setup Firebase Admin SDK**
+
+   ```bash
+   npm install firebase-admin
+   ```
+
+2. **Configure service account** (see admin-setup.js)
+
+3. **Run the script**
+
+   ```bash
+   node scripts/admin-setup.js
+   ```
+
+4. **Use the functions**
+   ```javascript
+   await createAdminUser("admin@example.com", "password123", "Admin Name");
+   await grantAdminPrivileges("user-uid-here");
+   ```
+
+---
+
+## 🔑 Login Process
+
+### For Admin Users:
+
+1. **Login normally** through your app's login screen
+2. **Check profile screen** - admin users will see a red "Admin Dashboard" button
+3. **Click admin button** to access admin features
+4. **Use admin dashboard** to manage users and recipes
+
+### Admin Dashboard Features:
+
+- **Dashboard Tab**: View app statistics
+- **Users Tab**: Manage all users, delete accounts
+- **Recipes Tab**: Monitor recipes, remove content
+
+---
+
+## 🏗️ Admin User Structure
+
+Every admin user document in Firestore should have:
+
+```javascript
+{
+  uid: "user-unique-id",
+  email: "admin@example.com",
+  displayName: "Admin Name",
+  role: "admin",           // ← Required
+  isAdmin: true,           // ← Required
+  emailVerified: true,
+  bio: "Admin user",
+  followers: [],
+  followersCount: 0,
+  totalRecipes: 0,
+  totalLikes: 0,
+  averageRating: 0,
+  totalReceivedRatings: 0,
+  isGuest: false,
+  createdAt: timestamp,
+  updatedAt: timestamp
+}
+```
+
+---
+
+## ⚠️ Important Notes
+
+1. **Security**: Don't leave admin creation methods in production
+2. **Email Verification**: Admin users should have verified emails
+3. **Password**: Use strong passwords for admin accounts
+4. **Limited Access**: Only give admin privileges to trusted users
+5. **Testing**: Test admin features thoroughly before production
+
+---
+
+## 🎯 Quick Admin Creation (Development)
+
+For quick testing, you can temporarily modify your login screen:
+
+```javascript
+// Add this button temporarily for testing
+const handleMakeAdmin = async () => {
+  if (user) {
+    await makeUserAdmin(user.uid);
+    alert("You are now an admin! Logout and login again.");
+  }
+};
+
+// Add button to your profile or settings screen
+<Button title="Make Me Admin" onPress={handleMakeAdmin} />;
+```
+
+Remember to remove this after creating your admin users!

@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "recipe-book-mobile-86ccb"
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": [
+    {
+      "bucket": "recipe-book-mobile-86ccb.firebasestorage.app",
+      "rules": "storage.rules"
+    }
+  ]
+}
