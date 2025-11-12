@@ -3,6 +3,7 @@ import { Tabs } from "expo-router";
 import type { User } from "firebase/auth";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth, db } from "../../firebaseConfig";
 import { useTheme } from "../../hooks/useTheme";
 
@@ -19,6 +20,7 @@ function TabBarIcon({
 
 export default function TabsLayout() {
   const { appTheme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [unreadCount, setUnreadCount] = useState<number | undefined>(undefined);
 
   useEffect(() => {
@@ -58,8 +60,8 @@ export default function TabsLayout() {
         },
         tabBarStyle: {
           backgroundColor: appTheme.colors.background,
-          height: 60, // Compact height for Android nav
-          paddingBottom: 8,
+          height: 60 + insets.bottom, // Add safe area bottom inset for system nav
+          paddingBottom: Math.max(8, insets.bottom), // Account for system nav buttons
           paddingTop: 8,
           borderTopWidth: 1,
           borderTopColor: appTheme.colors.borderPrimary,
