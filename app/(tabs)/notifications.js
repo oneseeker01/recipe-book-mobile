@@ -2,7 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
   collection,
+  deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   query,
   updateDoc,
@@ -163,12 +165,65 @@ export default function NotificationsScreen() {
     );
   }
 
+  const handleClearAllNotifications = async () => {
+    if (!user) return;
+
+    Alert.alert(
+      "Clear All Notifications",
+      "Are you sure you want to clear all notifications? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear All",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Get all notifications for the user
+              const notificationsRef = collection(
+                db,
+                "users",
+                user.uid,
+                "notifications"
+              );
+              const snapshot = await getDocs(notificationsRef);
+
+              // Delete all notifications
+              const deletePromises = snapshot.docs.map((doc) =>
+                deleteDoc(doc.ref)
+              );
+              await Promise.all(deletePromises);
+
+              Alert.alert("Success", "All notifications cleared");
+            } catch (error) {
+              console.error("Error clearing notifications:", error);
+              Alert.alert("Error", "Failed to clear notifications");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <AppLayout
       scrollable={true}
       hasHeader={true}
       header={
-        <AppHeader title="Notifications" centered={true} showBack={false} />
+        <AppHeader
+          title="Notifications"
+          centered={true}
+          showBack={false}
+          rightActions={
+            notifications.length > 0 ? (
+              <TouchableOpacity
+                onPress={handleClearAllNotifications}
+                style={{ padding: 8 }}
+              >
+                <Ionicons name="trash-outline" size={20} color="#A12D2A" />
+              </TouchableOpacity>
+            ) : null
+          }
+        />
       }
     >
       {notifications.length === 0 ? (
@@ -176,24 +231,25 @@ export default function NotificationsScreen() {
           <Ionicons name="notifications-off-outline" size={48} color="#DDD" />
           <Text style={styles.emptyTitle}>No notifications yet</Text>
           <Text style={styles.emptySubtext}>
-            You'll get notifications when the admin adds new recipes or chefs
+            You&apos;ll get notifications when the admin adds new recipes or chefs
           </Text>
         </View>
       ) : (
         <View style={styles.notificationsList}>
           {notifications.map((notification) => (
-            <TouchableOpacity
+            <Card
               key={notification.notificationId}
-              onPress={() => handleNotificationPress(notification)}
-              activeOpacity={0.7}
+              variant={notification.isRead ? "outlined" : "flat"}
+              padding={16}
+              style={[
+                styles.notificationCard,
+                !notification.isRead && styles.notificationCardUnread,
+              ]}
             >
-              <Card
-                variant={notification.isRead ? "outlined" : "flat"}
-                padding={16}
-                style={[
-                  styles.notificationCard,
-                  !notification.isRead && styles.notificationCardUnread,
-                ]}
+              <TouchableOpacity
+                onPress={() => handleNotificationPress(notification)}
+                activeOpacity={0.7}
+                style={styles.notificationTouchable}
               >
                 <View style={styles.notificationContent}>
                   {/* Icon */}
@@ -234,8 +290,8 @@ export default function NotificationsScreen() {
                   {/* Unread Indicator */}
                   {!notification.isRead && <View style={styles.unreadDot} />}
                 </View>
-              </Card>
-            </TouchableOpacity>
+              </TouchableOpacity>
+            </Card>
           ))}
         </View>
       )}
@@ -366,5 +422,8 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: "#A12D2A",
     flexShrink: 0,
+  },
+  notificationTouchable: {
+    flex: 1,
   },
 });

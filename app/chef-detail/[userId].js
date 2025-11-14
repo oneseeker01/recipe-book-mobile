@@ -17,7 +17,6 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -28,13 +27,16 @@ import AppHeader from "../../components/AppHeader";
 import AppLayout from "../../components/AppLayout";
 import Button from "../../components/Button";
 import Card from "../../components/Card";
+import ChefAvatar from "../../components/ChefAvatar";
 import RecipeCard from "../../components/RecipeCard";
 import { auth, db } from "../../firebaseConfig";
+import useChefFavorites from "../../hooks/useChefFavorites";
 
 export default function ChefProfileScreen() {
   const { userId } = useLocalSearchParams();
   const router = useRouter();
   const currentUser = auth.currentUser;
+  const { favoriteChefIds } = useChefFavorites();
 
   // Chef Data
   const [chef, setChef] = useState(null);
@@ -78,6 +80,16 @@ export default function ChefProfileScreen() {
     }
   };
 
+  // Helper function to convert string to title case
+  const toTitleCase = (str) => {
+    if (!str) return str;
+    return str
+      .toLowerCase()
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
+
   // Fetch chef profile data
   useEffect(() => {
     if (!userId) return;
@@ -85,7 +97,14 @@ export default function ChefProfileScreen() {
     const fetchChefData = async () => {
       try {
         setLoading(true);
-        const chefDoc = await getDoc(doc(db, "users", userId));
+
+        // First try to fetch from users collection (for user profiles)
+        let chefDoc = await getDoc(doc(db, "users", userId));
+
+        if (!chefDoc.exists()) {
+          // If not found in users, try chefs collection (for admin-created chefs)
+          chefDoc = await getDoc(doc(db, "chefs", userId));
+        }
 
         if (chefDoc.exists()) {
           setChef({
@@ -120,9 +139,10 @@ export default function ChefProfileScreen() {
     const fetchChefRecipes = async () => {
       try {
         setRecipesLoading(true);
+        // Query recipes by chefId for chef profiles
         const q = query(
           collection(db, "recipes"),
-          where("userId", "==", userId),
+          where("chefId", "==", userId),
           where("isPublished", "==", true),
           orderBy("createdAt", "desc")
         );
@@ -229,129 +249,147 @@ export default function ChefProfileScreen() {
   const isOwnProfile = currentUser && currentUser.uid === userId;
   const followerCount = chef.followers?.length || 0;
   const avgRating = chef.averageRating || 0;
+  const isFavorited = favoriteChefIds.includes(userId);
+
+  const handleFavoriteToggle = async () => {
+    if (!currentUser) {
+      Alert.alert("Sign in required", "Please sign in to favorite chefs");
+      return;
+    }
+
+    try {
+      const userRef = doc(db, "users", currentUser.uid);
+      const userDoc = await getDoc(userRef);
+
+      if (!userDoc.exists()) {
+        await setDoc(userRef, {
+          favoriteChefs: [userId],
+          uid: currentUser.uid,
+          email: currentUser.email,
+          followers: [],
+          followersCount: 0,
+          totalRecipes: 0,
+          totalLikes: 0,
+          averageRating: 0,
+          totalReceivedRatings: 0,
+          isGuest: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      } else {
+        const currentFavorites = userDoc.data().favoriteChefs || [];
+        const newFavorites = isFavorited
+          ? currentFavorites.filter((id) => id !== userId)
+          : [...currentFavorites, userId];
+
+        await updateDoc(userRef, {
+          favoriteChefs: newFavorites,
+        });
+      }
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+      Alert.alert("Error", "Failed to update favorite status");
+    }
+  };
 
   return (
     <AppLayout
-      scrollable={false}
-      header={
-        <AppHeader
-          title="Chef Profile"
-          showBack={true}
-          onBackPress={() => router.back()}
-        />
-      }
+      scrollable={true}
+      hasHeader={true}
+      header={<AppHeader title="Chef Profile" showBack={true} />}
     >
-      {/* Chef Title Card */}
-      <Card variant="flat" padding={20} style={styles.titleCard}>
-        <Text style={styles.chefTitle}>
-          {chef.displayName || "Anonymous Chef"}
-        </Text>
-        {chef.cuisine && (
-          <Text style={styles.cuisineBadge}>{chef.cuisine}</Text>
+      {/* Simplified Profile Card */}
+      <View style={styles.profileCard}>
+        {/* Avatar */}
+        <View style={styles.avatarContainer}>
+          <ChefAvatar
+            name={chef.displayName || chef.name || "Anonymous Chef"}
+            photoURL={chef.image || chef.profilePicture}
+            showName={false}
+          />
+        </View>
+
+        {/* Favorite Button - Repositioned below avatar */}
+        {!isOwnProfile && (
+          <TouchableOpacity
+            style={styles.favoriteButtonBelow}
+            onPress={handleFavoriteToggle}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={isFavorited ? "heart" : "heart-outline"}
+              size={20}
+              color={isFavorited ? "#E74C3C" : "#666"}
+            />
+            <Text
+              style={[
+                styles.favoriteButtonText,
+                { color: isFavorited ? "#E74C3C" : "#666" },
+              ]}
+            >
+              {isFavorited ? "Favorited" : "Add to Favorites"}
+            </Text>
+          </TouchableOpacity>
         )}
-      </Card>
 
-      {/* Chef Profile Card */}
-      <Card variant="flat" padding={20} style={styles.profileCard}>
-        <View style={styles.profileContent}>
-          {/* Avatar Section */}
-          <View style={styles.avatarSection}>
-            {chef.profilePicture ? (
-              <Image
-                source={{ uri: chef.profilePicture }}
-                style={styles.avatar}
+        {/* Chef Info */}
+        <Text style={styles.displayName}>
+          {chef.displayName || chef.name || "Anonymous Chef"}
+        </Text>
+        {chef.email && <Text style={styles.email}>{chef.email}</Text>}
+
+        {/* Additional Chef Details */}
+        <View style={styles.detailsContainer}>
+          {chef.cuisine && (
+            <View style={[styles.detailBadge, styles.cuisineBadge]}>
+              <Ionicons
+                name="restaurant-outline"
+                size={14}
+                color="#FFF"
+                style={styles.badgeIcon}
               />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarText}>
-                  {(chef.displayName || "Chef")[0]}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Personal Info Grid */}
-          <View style={styles.infoGrid}>
-            {chef.age && (
-              <View style={styles.infoChip}>
-                <Ionicons name="calendar-outline" size={14} color="#A12D2A" />
-                <Text style={styles.infoText}>Age: {chef.age}</Text>
-              </View>
-            )}
-            {chef.sex && (
-              <View style={styles.infoChip}>
-                <Ionicons name="people-outline" size={14} color="#A12D2A" />
-                <Text style={styles.infoText}>{chef.sex}</Text>
-              </View>
-            )}
-            {chef.birthday && (
-              <View style={styles.infoChip}>
-                <Ionicons name="gift-outline" size={14} color="#A12D2A" />
-                <Text style={styles.infoText}>
-                  🎂 {formatBirthday(chef.birthday)}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Bio Section */}
-          {chef.bio && (
-            <View style={styles.bioSection}>
-              <Text style={styles.bio}>{chef.bio}</Text>
+              <Text style={styles.detailBadgeText}>
+                {toTitleCase(chef.cuisine)}
+              </Text>
             </View>
           )}
 
-          {/* Stats Section */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Ionicons name="book-outline" size={16} color="#A12D2A" />
-              <Text style={styles.statText}>{recipes.length}</Text>
-              <Text style={styles.statLabel}>Recipes</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Ionicons name="people-outline" size={16} color="#A12D2A" />
-              <Text style={styles.statText}>{followerCount}</Text>
-              <Text style={styles.statLabel}>Followers</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Ionicons name="heart-outline" size={16} color="#A12D2A" />
-              <Text style={styles.statText}>{chef.totalLikes || 0}</Text>
-              <Text style={styles.statLabel}>Likes</Text>
-            </View>
-          </View>
-
-          {/* Action Button */}
-          <View style={styles.actionSection}>
-            {!isOwnProfile && (
-              <Button
-                title={isFollowing ? "Following" : "Follow Chef"}
-                onPress={handleFollowToggle}
-                variant={isFollowing ? "secondary" : "primary"}
-                size="medium"
-                iconName={isFollowing ? "checkmark" : "person-add-outline"}
-                style={styles.followButton}
+          {chef.sex && (
+            <View style={[styles.detailBadge, styles.genderBadge]}>
+              <Ionicons
+                name="male-female-outline"
+                size={14}
+                color="#FFF"
+                style={styles.badgeIcon}
               />
-            )}
-
-            {isOwnProfile && (
-              <Button
-                title="Edit Profile"
-                onPress={() => router.push("/profile")}
-                variant="secondary"
-                size="medium"
-                iconName="pencil-outline"
-                style={styles.editButton}
+              <Text style={styles.detailBadgeText}>
+                {toTitleCase(chef.sex)}
+              </Text>
+            </View>
+          )}
+          {formatBirthday(chef.birthdate) && (
+            <View style={[styles.detailBadge, styles.birthdayBadge]}>
+              <Ionicons
+                name="calendar-outline"
+                size={14}
+                color="#FFF"
+                style={styles.badgeIcon}
               />
-            )}
-          </View>
+              <Text style={styles.detailBadgeText}>
+                {formatBirthday(chef.birthdate)}
+              </Text>
+            </View>
+          )}
         </View>
-      </Card>
+
+        {chef.bio && <Text style={styles.bio}>{chef.bio}</Text>}
+      </View>
 
       {/* Recipes Section */}
       <Card variant="flat" padding={20} style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
-            👨‍🍳 {chef.displayName || "Chef"}'s Recipes
+            👨‍🍳 {chef.displayName || chef.name || "Chef"}&#39;s Recipes
           </Text>
           <Text style={styles.recipeCount}>({recipes.length})</Text>
         </View>
@@ -365,7 +403,7 @@ export default function ChefProfileScreen() {
             <Ionicons name="document-outline" size={48} color="#CCC" />
             <Text style={styles.emptyTitle}>No recipes yet</Text>
             <Text style={styles.emptyText}>
-              This chef hasn't published any recipes yet.
+              This chef hasn&#39;t published any recipes yet.
             </Text>
           </View>
         ) : (
@@ -406,38 +444,22 @@ const styles = StyleSheet.create({
     color: "#E74C3C",
     marginTop: 12,
   },
-  titleCard: {
-    marginBottom: 20,
-    backgroundColor: "#FFF",
-    alignItems: "center",
-  },
-  chefTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#1A1A1A",
-    textAlign: "center",
-    lineHeight: 30,
-  },
-  cuisineBadge: {
-    fontSize: 14,
-    color: "#A12D2A",
-    fontWeight: "600",
-    backgroundColor: "#FFF5F0",
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 15,
-    marginTop: 8,
-  },
   profileCard: {
-    marginBottom: 20,
     backgroundColor: "#FFF",
-  },
-  profileContent: {
-    gap: 16,
-  },
-  avatarSection: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    paddingVertical: 32,
+    paddingHorizontal: 20,
     alignItems: "center",
-    marginBottom: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  avatarContainer: {
+    marginBottom: 20,
   },
   avatar: {
     width: 100,
@@ -452,77 +474,73 @@ const styles = StyleSheet.create({
     backgroundColor: "#A12D2A",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 4,
-    borderColor: "#E8E8E8",
   },
   avatarText: {
-    fontSize: 36,
+    fontSize: 40,
     fontWeight: "bold",
     color: "#FFF",
   },
-  infoGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    justifyContent: "center",
+  displayName: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#1A1A1A",
+    marginBottom: 6,
+    textAlign: "center",
   },
-  infoChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#F0F0F0",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-  },
-  infoText: {
-    fontSize: 12,
+  email: {
+    fontSize: 16,
     color: "#666",
-    fontWeight: "500",
-  },
-  bioSection: {
-    backgroundColor: "#FAFAFA",
-    padding: 16,
-    borderRadius: 12,
+    marginBottom: 12,
   },
   bio: {
     fontSize: 14,
-    color: "#666",
-    lineHeight: 20,
+    color: "#888",
     textAlign: "center",
+    fontStyle: "italic",
+    lineHeight: 20,
+    maxWidth: "90%",
   },
-  statsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
+  detailsContainer: {
+    flexDirection: "column",
     alignItems: "center",
-    backgroundColor: "#FAFAFA",
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-  },
-  statItem: {
-    alignItems: "center",
+    marginBottom: 16,
     gap: 4,
   },
-  statText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1A1A1A",
-  },
-  statLabel: {
-    fontSize: 11,
+  detailText: {
+    fontSize: 14,
     color: "#666",
-    fontWeight: "500",
+    textAlign: "center",
   },
-  actionSection: {
-    marginTop: 8,
+  detailBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 4,
   },
-  followButton: {
-    width: "100%",
+  badgeIcon: {
+    marginRight: 4,
   },
-  editButton: {
-    width: "100%",
+  detailBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#FFF",
+    textAlign: "center",
   },
+  cuisineBadge: {
+    backgroundColor: "#3498DB",
+  },
+  ageBadge: {
+    backgroundColor: "#E74C3C",
+  },
+  genderBadge: {
+    backgroundColor: "#9B59B6",
+  },
+  birthdayBadge: {
+    backgroundColor: "#F39C12",
+  },
+
   sectionCard: {
     marginBottom: 16,
     backgroundColor: "#FFF",
@@ -561,5 +579,37 @@ const styles = StyleSheet.create({
     color: "#666",
     marginTop: 6,
     textAlign: "center",
+  },
+  favoriteButton: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  favoriteButtonBelow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FFF",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    marginBottom: 16,
+  },
+  favoriteButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

@@ -4,6 +4,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { useColors } from "../hooks/useTheme";
 
 /**
  * Global AppLayout wrapper component
@@ -19,19 +20,24 @@ import {
 export default function AppLayout({
   children,
   scrollable = true,
-  backgroundColor = "#FAFAFA",
+  backgroundColor,
   style = {},
   hasHeader = false,
   header = null,
   isList = false,
 }) {
   const insets = useSafeAreaInsets();
+  const colors = useColors();
+
+  // Use theme background if no custom color provided
+  const bgColor = backgroundColor || colors.background;
+
   // When wrapped in a ScrollView we must NOT force the inner container to flex:1
   // because that prevents the ScrollView from measuring content height and
   // makes scrolling behave like a fixed layout. For non-scrollable screens we
   // still want the content to fill the available space.
   const innerBase = {
-    backgroundColor,
+    backgroundColor: bgColor,
     paddingTop: hasHeader ? 0 : 8,
     // Add bottom padding to account for system nav buttons + extra spacing
     paddingBottom: Math.max(16, insets.bottom + 16),
@@ -48,7 +54,7 @@ export default function AppLayout({
 
   return (
     <SafeAreaView
-      style={styles.safeArea}
+      style={[styles.safeArea, { backgroundColor: bgColor }]}
       edges={["top", "left", "right", "bottom"]}
     >
       {/* Render optional fixed header outside the scrollable content */}
@@ -72,7 +78,6 @@ export default function AppLayout({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#FAFAFA",
   },
   scrollView: {
     flex: 1,

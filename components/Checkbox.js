@@ -23,10 +23,7 @@ export default function Checkbox({
       <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
         {checked && <Ionicons name="checkmark" size={14} color="#FFF" />}
       </View>
-      <Text
-        style={[styles.label, checked && styles.labelChecked]}
-        numberOfLines={2}
-      >
+      <Text style={[styles.label, checked && styles.labelChecked]}>
         {label}
       </Text>
     </TouchableOpacity>

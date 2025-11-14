@@ -41,7 +41,6 @@ const RECIPE_CATEGORIES = [
   "Pasta",
   "Soup",
 ];
-
 const CHEF_CUISINES = [
   "All",
   "Italian",
@@ -53,6 +52,7 @@ const CHEF_CUISINES = [
   "Thai",
   "American",
   "Mediterranean",
+  "British",
 ];
 
 const RECIPE_SORT_OPTIONS = [
@@ -65,10 +65,6 @@ const CHEF_SORT_OPTIONS = [
   { label: "Newest", value: "newest" },
   { label: "A-Z", value: "alphabetical" },
   { label: "Z-A", value: "alphabeticalReverse" },
-  { label: "Age", value: "age" },
-  { label: "Gender", value: "gender" },
-  { label: "Birthday", value: "birthday" },
-  { label: "Cuisine", value: "cuisine" },
 ];
 
 export default function HomeScreen() {
@@ -78,6 +74,7 @@ export default function HomeScreen() {
   const [topRecipes, setTopRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCuisine, setSelectedCuisine] = useState("All");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [sortBy, setSortBy] = useState("newest");
   const [favorites, setFavorites] = useState(new Set());
@@ -99,6 +96,8 @@ export default function HomeScreen() {
           const allRecipes = snapshot.docs.map((doc) => ({
             recipeId: doc.id,
             ...doc.data(),
+            // Add cuisine information from recipe data or author data
+            cuisine: doc.data().cuisine || doc.data().authorCuisine,
           }));
           // Filter to only show admin-added recipes client-side
           const adminRecipes = allRecipes.filter(
@@ -144,50 +143,75 @@ export default function HomeScreen() {
     }
   }, [sortBy, viewMode, isAdmin]);
 
-  // Fetch admin-added chefs only (simplified to avoid composite indexes)
+  // Fetch admin-added chefs only (from chefs collection)
   useEffect(() => {
     if (viewMode !== "chefs") return;
 
     const fetchChefs = async () => {
       setLoading(true);
       try {
-        const usersRef = collection(db, "users");
+        const chefsRef = collection(db, "chefs");
         let q;
 
         // Use simpler queries and filter client-side
         switch (sortBy) {
           case "alphabetical":
-            q = query(usersRef, orderBy("displayName", "asc"), limit(100));
+            q = query(chefsRef, orderBy("name", "asc"), limit(100));
             break;
           case "alphabeticalReverse":
-            q = query(usersRef, orderBy("displayName", "desc"), limit(100));
-            break;
-          case "age":
-            q = query(usersRef, orderBy("age", "asc"), limit(100));
-            break;
-          case "gender":
-            q = query(usersRef, orderBy("sex", "asc"), limit(100));
-            break;
-          case "birthday":
-            q = query(usersRef, orderBy("birthday", "asc"), limit(100));
-            break;
-          case "cuisine":
-            q = query(usersRef, orderBy("cuisine", "asc"), limit(100));
+            q = query(chefsRef, orderBy("name", "desc"), limit(100));
             break;
           default: // newest
-            q = query(usersRef, orderBy("createdAt", "desc"), limit(100));
+            q = query(chefsRef, orderBy("createdAt", "desc"), limit(100));
         }
 
         const snapshot = await getDocs(q);
-        const allChefs = snapshot.docs.map((doc) => ({
-          userId: doc.id,
-          ...doc.data(),
-        }));
-        // Filter to only show admin-added chefs client-side
-        const adminChefs = allChefs.filter(
-          (chef) => chef.isAdmin === true && chef.isChef === true
+        const allChefs = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            userId: doc.id, // Map chefId to userId for ChefCard compatibility
+            displayName: data.displayName || data.name,
+            cuisine: data.cuisine || data.specialty, // Support both cuisine and specialty fields
+            bio: data.bio,
+            profilePicture: data.image,
+            verified: data.verified,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            // Set defaults for missing fields
+            followersCount: 0,
+            totalRecipes: 0,
+            totalLikes: 0,
+            averageRating: 0,
+          };
+        });
+        // Filter to only show admin-added chefs client-side (verified by admin)
+        const adminChefs = allChefs.filter((chef) => chef.verified === true);
+
+        // Fetch recipe counts for admin chefs
+        const recipesRef = collection(db, "recipes");
+        const recipesQuery = query(
+          recipesRef,
+          where("isPublished", "==", true),
+          where("isAdminContent", "==", true)
         );
-        setChefs(adminChefs);
+        const recipesSnapshot = await getDocs(recipesQuery);
+        const recipeCountMap = {};
+
+        recipesSnapshot.docs.forEach((doc) => {
+          const recipeData = doc.data();
+          const chefId = recipeData.chefId;
+          if (chefId) {
+            recipeCountMap[chefId] = (recipeCountMap[chefId] || 0) + 1;
+          }
+        });
+
+        // Update chefs with actual recipe counts
+        const chefsWithRecipeCounts = adminChefs.map((chef) => ({
+          ...chef,
+          totalRecipes: recipeCountMap[chef.userId] || 0,
+        }));
+
+        setChefs(chefsWithRecipeCounts);
       } catch (error) {
         console.error("Error fetching chefs: ", error);
       } finally {
@@ -258,6 +282,8 @@ export default function HomeScreen() {
             const allRecipes = snapshot.docs.map((doc) => ({
               recipeId: doc.id,
               ...doc.data(),
+              // Add cuisine information from recipe data or author data
+              cuisine: doc.data().cuisine || doc.data().authorCuisine,
             }));
             // Filter to only show admin-added recipes client-side
             const adminRecipes = allRecipes.filter(
@@ -314,13 +340,24 @@ export default function HomeScreen() {
               .includes(searchQuery.toLowerCase()))
       );
     }
+
+    // Apply sorting after filtering
+    if (sortBy === "alphabetical") {
+      filteredRecipes = [...filteredRecipes].sort((a, b) =>
+        a.title.localeCompare(b.title)
+      );
+    } else if (sortBy === "alphabeticalReverse") {
+      filteredRecipes = [...filteredRecipes].sort((a, b) =>
+        b.title.localeCompare(a.title)
+      );
+    }
   } else {
-    // Filter chefs by cuisine
-    if (selectedCategory !== "All") {
+    // Chefs view - add cuisine filtering
+    if (selectedCuisine !== "All") {
       filteredChefs = filteredChefs.filter(
         (chef) =>
           chef.cuisine &&
-          chef.cuisine.toLowerCase() === selectedCategory.toLowerCase()
+          chef.cuisine.toLowerCase() === selectedCuisine.toLowerCase()
       );
     }
 
@@ -333,6 +370,17 @@ export default function HomeScreen() {
               .includes(searchQuery.toLowerCase())) ||
           (chef.bio &&
             chef.bio.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
+
+    // Apply sorting after filtering
+    if (sortBy === "alphabetical") {
+      filteredChefs = [...filteredChefs].sort((a, b) =>
+        a.displayName.localeCompare(b.displayName)
+      );
+    } else if (sortBy === "alphabeticalReverse") {
+      filteredChefs = [...filteredChefs].sort((a, b) =>
+        b.displayName.localeCompare(a.displayName)
       );
     }
   }
@@ -459,7 +507,7 @@ export default function HomeScreen() {
             ]}
             onPress={() => {
               setViewMode("chefs");
-              setSelectedCategory("All");
+              setSelectedCuisine("All");
             }}
           >
             <Ionicons
@@ -542,18 +590,16 @@ export default function HomeScreen() {
         </Card>
       </View>
 
-      {/* Category Filter */}
-      <View style={styles.categorySection}>
-        <Text style={styles.categoryLabel}>
-          {viewMode === "recipes" ? "Categories:" : "Cuisines:"}
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoriesContent}
-        >
-          {(viewMode === "recipes" ? RECIPE_CATEGORIES : CHEF_CUISINES).map(
-            (category) => (
+      {/* Category Filter - only show for recipes */}
+      {viewMode === "recipes" && (
+        <View style={styles.categorySection}>
+          <Text style={styles.categoryLabel}>Categories:</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoriesContent}
+          >
+            {RECIPE_CATEGORIES.map((category) => (
               <TouchableOpacity
                 key={category}
                 style={[
@@ -572,10 +618,42 @@ export default function HomeScreen() {
                   {category}
                 </Text>
               </TouchableOpacity>
-            )
-          )}
-        </ScrollView>
-      </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Cuisine Filter - only show for chefs */}
+      {viewMode === "chefs" && (
+        <View style={styles.categorySection}>
+          <Text style={styles.categoryLabel}>Cuisines:</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoriesContent}
+          >
+            {CHEF_CUISINES.map((cuisine) => (
+              <TouchableOpacity
+                key={cuisine}
+                style={[
+                  styles.categoryTag,
+                  selectedCuisine === cuisine && styles.categoryTagActive,
+                ]}
+                onPress={() => setSelectedCuisine(cuisine)}
+              >
+                <Text
+                  style={[
+                    styles.categoryTagText,
+                    selectedCuisine === cuisine && styles.categoryTagTextActive,
+                  ]}
+                >
+                  {cuisine}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Recipe/Chef List */}
       {viewMode === "recipes" ? (

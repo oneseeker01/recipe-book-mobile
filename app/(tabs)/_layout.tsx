@@ -60,16 +60,17 @@ export default function TabsLayout() {
         },
         tabBarStyle: {
           backgroundColor: appTheme.colors.background,
-          height: 60 + insets.bottom, // Add safe area bottom inset for system nav
-          paddingBottom: Math.max(8, insets.bottom), // Account for system nav buttons
-          paddingTop: 8,
+          height: 70 + Math.max(insets.bottom, 12), // Increased base height + adaptive inset
+          paddingBottom: Math.max(12, insets.bottom + 8), // Extra padding for system nav clearance
+          paddingTop: 10,
+          paddingHorizontal: 8,
           borderTopWidth: 1,
           borderTopColor: appTheme.colors.borderPrimary,
-          elevation: 8, // Shadow for better separation
+          elevation: 12, // Increased shadow elevation
           shadowColor: appTheme.colors.shadow,
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: appTheme.isDark ? 0.3 : 0.1,
-          shadowRadius: 4,
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: appTheme.isDark ? 0.4 : 0.15,
+          shadowRadius: 6,
         },
         tabBarIconStyle: {
           marginBottom: 0, // Remove bottom margin for compact look

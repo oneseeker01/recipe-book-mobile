@@ -4,20 +4,26 @@
 
 export interface Recipe {
   id: string;
+  recipeId: string; // Firestore document ID
   title: string;
   description: string;
   imageUrl: string;
+  image?: string; // Alternative image field used in components
   authorId: string;
   authorName: string;
   ingredients: Ingredient[];
   instructions: string[];
   cookingTime: number; // in minutes
+  prepTime?: number; // Alternative prep time field
   servings: number;
   difficulty: "Easy" | "Medium" | "Hard";
   category: string;
+  cuisine?: string; // Cuisine type (British, Italian, American, etc.)
   tags: string[];
   ratings: Record<string, Rating>;
   averageRating?: number;
+  isAdminContent?: boolean; // Admin-added content flag
+  isPublished?: boolean; // Published status
   createdAt: Date;
   updatedAt: Date;
 }

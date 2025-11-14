@@ -36,6 +36,7 @@ import RecipeCard from "../../components/RecipeCard";
 import Select from "../../components/Select";
 import TextInput from "../../components/TextInput";
 import { auth, db, storage } from "../../firebaseConfig";
+import { isAdmin, isChef } from "../../lib/auth-helpers";
 
 const DIFFICULTY_OPTIONS = [
   { label: "Easy", value: "easy" },
@@ -74,11 +75,16 @@ export default function MyRecipesScreen() {
     category: "",
     prepTime: "",
     servings: "",
-    cost: "",
     ingredients: [],
     instructions: [],
     image: null,
   });
+
+  // Calculate total cost dynamically
+  const totalCost = formData.ingredients.reduce((sum, ing) => {
+    const price = parseFloat(ing.price) || 0;
+    return sum + price;
+  }, 0);
 
   const [formErrors, setFormErrors] = useState({});
 
@@ -97,6 +103,7 @@ export default function MyRecipesScreen() {
       const q = query(
         collection(db, "recipes"),
         where("userId", "==", user.uid),
+        where("isAdminContent", "==", false),
         orderBy("createdAt", "desc")
       );
       const querySnapshot = await getDocs(q);
@@ -113,7 +120,7 @@ export default function MyRecipesScreen() {
     }
   };
 
-  const validateForm = () => {
+  const validateForm = async () => {
     const errors = {};
 
     if (!formData.title.trim()) errors.title = "Recipe title is required";
@@ -220,6 +227,7 @@ export default function MyRecipesScreen() {
       return null;
     }
   };
+
   const handleSaveRecipe = async () => {
     if (!validateForm()) {
       Alert.alert("Validation Error", "Please fix the errors above");
@@ -235,11 +243,36 @@ export default function MyRecipesScreen() {
       if (formData.image && formData.image.startsWith("file://")) {
         imageUrl = await uploadImage(formData.image);
       }
+
       // Compute estimated cost from ingredients if provided
       const estimatedCost = (formData.ingredients || []).reduce((sum, ing) => {
         const p = parseFloat(ing.price);
         return sum + (isNaN(p) ? 0 : p);
       }, 0);
+
+      // Check if current user is admin or chef
+      const userIsAdmin = await isAdmin(user);
+      const userIsChef = await isChef(user);
+
+      // Get author name based on user type
+      let authorName = user.displayName || "Anonymous";
+      if (userIsChef) {
+        try {
+          const chefQuery = query(
+            collection(db, "chefs"),
+            where("userId", "==", user.uid)
+          );
+          const chefSnapshot = await getDocs(chefQuery);
+          if (!chefSnapshot.empty) {
+            const chefData = chefSnapshot.docs[0].data();
+            authorName = chefData.name || chefData.displayName || "Chef";
+          }
+        } catch (error) {
+          console.warn("Error fetching chef name:", error);
+        }
+      } else if (userIsAdmin) {
+        authorName = "Administrator";
+      }
 
       const recipeData = {
         title: formData.title,
@@ -248,17 +281,19 @@ export default function MyRecipesScreen() {
         category: formData.category,
         prepTime: parseInt(formData.prepTime),
         servings: parseInt(formData.servings),
-        // Use explicit cost if filled, otherwise use sum of ingredient prices
-        cost: parseFloat(formData.cost) || estimatedCost || 0,
+        // Use sum of ingredient prices for cost
+        cost: estimatedCost || 0,
         ingredients: formData.ingredients,
         instructions: formData.instructions,
         image: imageUrl,
-        userId: user.uid,
-        authorName: user.displayName || "Anonymous",
+        userId: user.uid, // Always use current user's ID
+        authorName: authorName,
         ratings: 0,
         totalRatings: 0,
-        // User-created recipes are not published to Home by default; admin publishes recipes centrally
-        isPublished: false,
+        // Regular user recipes are not published to Home by default
+        isPublished: userIsAdmin || userIsChef,
+        // Only admin/chef-created recipes are marked as admin content
+        isAdminContent: userIsAdmin || userIsChef,
       };
 
       if (editingId) {
@@ -275,7 +310,8 @@ export default function MyRecipesScreen() {
           createdAt: new Date(),
           updatedAt: new Date(),
         });
-        // Add recipe id to user's myRecipes array for profile counts
+
+        // Add to user's myRecipes array
         try {
           await updateDoc(doc(db, "users", user.uid), {
             myRecipes: arrayUnion(docRef.id),
@@ -307,9 +343,12 @@ export default function MyRecipesScreen() {
           text: "Delete",
           onPress: async () => {
             try {
-              // Delete image from storage
+              // Delete image from storage (skip for Cloudinary URLs)
               const recipe = recipes.find((r) => r.recipeId === recipeId);
-              if (recipe?.image) {
+              if (
+                recipe?.image &&
+                !recipe.image.startsWith("https://res.cloudinary.com")
+              ) {
                 try {
                   const imageRef = ref(storage, recipe.image);
                   await deleteObject(imageRef);
@@ -353,7 +392,6 @@ export default function MyRecipesScreen() {
       category: recipe.category,
       prepTime: recipe.prepTime.toString(),
       servings: recipe.servings.toString(),
-      cost: recipe.cost?.toString() || "0",
       ingredients: recipe.ingredients || [],
       instructions: recipe.instructions || [],
       image: recipe.image,
@@ -370,7 +408,6 @@ export default function MyRecipesScreen() {
       category: "",
       prepTime: "",
       servings: "",
-      cost: "",
       ingredients: [],
       instructions: [],
       image: null,
@@ -548,8 +585,8 @@ export default function MyRecipesScreen() {
             <View style={styles.formContent}>
               <ImagePicker
                 label="Recipe Image"
-                imageUri={formData.image}
-                onImageSelected={(uri) =>
+                value={formData.image}
+                onChange={(uri) =>
                   setFormData((prev) => ({ ...prev, image: uri }))
                 }
                 error={formErrors.image}
@@ -628,16 +665,6 @@ export default function MyRecipesScreen() {
                   error={formErrors.servings}
                   containerStyle={{ flex: 1, marginLeft: 12 }}
                 />
-                <TextInput
-                  label="Est. Cost ($)"
-                  placeholder="5.00"
-                  value={formData.cost}
-                  onChangeText={(text) =>
-                    setFormData((prev) => ({ ...prev, cost: text }))
-                  }
-                  keyboardType="decimal-pad"
-                  containerStyle={{ flex: 1, marginLeft: 12 }}
-                />
               </View>
 
               {/* Ingredients */}
@@ -652,6 +679,16 @@ export default function MyRecipesScreen() {
                 error={formErrors.ingredients}
                 showPrice={true}
               />
+
+              {/* Total Cost Display */}
+              {formData.ingredients.length > 0 && (
+                <View style={styles.totalCostContainer}>
+                  <Text style={styles.totalCostLabel}>Total Cost:</Text>
+                  <Text style={styles.totalCostValue}>
+                    ₱{totalCost.toFixed(2)}
+                  </Text>
+                </View>
+              )}
 
               {/* Instructions */}
               <DynamicArray
@@ -807,5 +844,27 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 20,
     marginBottom: 30,
+  },
+  totalCostContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  totalCostLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1A1A1A",
+  },
+  totalCostValue: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#A12D2A",
   },
 });

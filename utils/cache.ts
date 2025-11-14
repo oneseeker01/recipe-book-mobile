@@ -286,11 +286,11 @@ export class NetworkManager {
 
 // Main cache service
 export class CacheService {
-  private recipeCache = new RecipeCache();
-  private userCache = new UserCache();
-  private favoritesCache = new FavoritesCache();
-  private chatCache = new ChatCache();
-  private settingsCache = new SettingsCache();
+  public recipeCache = new RecipeCache();
+  public userCache = new UserCache();
+  public favoritesCache = new FavoritesCache();
+  public chatCache = new ChatCache();
+  public settingsCache = new SettingsCache();
   private cacheManager = CacheManager.getInstance();
 
   // Sync all data when online

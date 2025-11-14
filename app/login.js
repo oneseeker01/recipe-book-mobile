@@ -24,9 +24,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { auth, db } from "../firebaseConfig";
+import { useColors } from "../hooks/useTheme";
 
 export default function LoginScreen() {
   const router = useRouter();
+  const colors = useColors();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -109,7 +111,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }] }>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -120,31 +122,31 @@ export default function LoginScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.headerSection}>
-              <View style={styles.logoContainer}>
+              <View style={[styles.logoContainer, { backgroundColor: colors.backgroundCard }]}>
                 <Image
                   source={require("../assets/images/recipebook.png")}
                   style={styles.logoImage}
                   resizeMode="contain"
                 />
               </View>
-              <Text style={styles.appTitle}>Recipe Book</Text>
-              <Text style={styles.tagline}>Discover Culinary Delights</Text>
+              <Text style={[styles.appTitle, { color: colors.textPrimary }]}>Recipe Book</Text>
+              <Text style={[styles.tagline, { color: colors.textSecondary }]}>Discover Culinary Delights</Text>
             </View>
 
             <View style={styles.formSection}>
-              <Text style={styles.formTitle}>Welcome Back!</Text>
+              <Text style={[styles.formTitle, { color: colors.textPrimary }]}>Welcome Back!</Text>
 
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, { backgroundColor: colors.backgroundCard, borderColor: colors.borderPrimary }]}>
                 <Ionicons
                   name="mail-outline"
                   size={20}
-                  color="#A12D2A"
+                  color={colors.primary}
                   style={styles.inputIcon}
                 />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: colors.textPrimary }]}
                   placeholder="Email"
-                  placeholderTextColor="#AAA"
+                  placeholderTextColor={colors.textMuted}
                   value={email}
                   onChangeText={setEmail}
                   autoCapitalize="none"
@@ -153,17 +155,17 @@ export default function LoginScreen() {
                 />
               </View>
 
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, { backgroundColor: colors.backgroundCard, borderColor: colors.borderPrimary }]}>
                 <Ionicons
                   name="lock-closed-outline"
                   size={20}
-                  color="#A12D2A"
+                  color={colors.primary}
                   style={styles.inputIcon}
                 />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: colors.textPrimary }]}
                   placeholder="Password"
-                  placeholderTextColor="#AAA"
+                  placeholderTextColor={colors.textMuted}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
@@ -176,7 +178,7 @@ export default function LoginScreen() {
                   <Ionicons
                     name={showPassword ? "eye-outline" : "eye-off-outline"}
                     size={20}
-                    color="#A12D2A"
+                    color={colors.primary}
                   />
                 </TouchableOpacity>
               </View>
@@ -190,13 +192,21 @@ export default function LoginScreen() {
                 disabled={loading}
               >
                 {loading ? (
-                  <ActivityIndicator size="small" color="#FFF" />
+                  <ActivityIndicator size="small" color={colors.textInverse} />
                 ) : (
                   <>
-                    <Ionicons name="log-in-outline" size={20} color="#FFF" />
-                    <Text style={styles.loginButtonText}>Login</Text>
+                    <Ionicons name="log-in-outline" size={20} color={colors.textInverse} />
+                    <Text style={[styles.loginButtonText, { color: colors.textInverse }]}>Login</Text>
                   </>
                 )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => router.push("/forgot-password")}
+                style={{ alignSelf: "flex-end", marginTop: 10 }}
+                disabled={loading}
+              >
+                <Text style={[{ fontSize: 13 }, { color: colors.primary }]}>Forgot Password?</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -208,11 +218,11 @@ export default function LoginScreen() {
                 disabled={loading}
               >
                 {loading ? (
-                  <ActivityIndicator size="small" color="#FFF" />
+                  <ActivityIndicator size="small" color={colors.textInverse} />
                 ) : (
                   <>
-                    <Ionicons name="person-outline" size={20} color="#FFF" />
-                    <Text style={styles.loginButtonText}>
+                    <Ionicons name="person-outline" size={20} color={colors.textInverse} />
+                    <Text style={[styles.loginButtonText, { color: colors.textInverse }]}>
                       Continue as Guest
                     </Text>
                   </>
@@ -220,15 +230,15 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
               <View style={styles.signupSection}>
-                <Text style={styles.signupText}>No account yet? </Text>
+                <Text style={[styles.signupText, { color: colors.textSecondary }]}>No account yet? </Text>
                 <Link href="/signup">
-                  <Text style={styles.signupLink}>Sign Up</Text>
+                  <Text style={[styles.signupLink, { color: colors.primary }]}>Sign Up</Text>
                 </Link>
               </View>
             </View>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Recipe Book v1.0</Text>
+              <Text style={[styles.footerText, { color: colors.textTertiary }]}>Recipe Book v1.0</Text>
             </View>
           </ScrollView>
         </TouchableWithoutFeedback>

@@ -4,22 +4,29 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function ImagePicker({
   label,
-  imageUri,
-  onImageSelected,
+  value,
+  onChange,
   error,
   containerStyle,
+  aspect = [4, 3],
+  quality = 0.8,
+  minSize = 0,
 }) {
   const handlePickImage = async () => {
     try {
       const result = await ImagePickerLib.launchImageLibraryAsync({
         mediaTypes: ImagePickerLib.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
+        aspect,
+        quality,
       });
 
       if (!result.canceled) {
-        onImageSelected(result.assets[0].uri);
+        const asset = result.assets[0];
+        if (minSize && (asset.width < minSize || asset.height < minSize)) {
+          return;
+        }
+        onChange(asset.uri);
       }
     } catch (error) {
       console.error("Error picking image:", error);
@@ -27,16 +34,16 @@ export default function ImagePicker({
   };
 
   const handleRemoveImage = () => {
-    onImageSelected(null);
+    onChange(null);
   };
 
   return (
     <View style={[styles.container, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
 
-      {imageUri ? (
+      {value ? (
         <View style={styles.imageContainer}>
-          <Image source={{ uri: imageUri }} style={styles.image} />
+          <Image source={{ uri: value }} style={styles.image} />
           <TouchableOpacity
             style={styles.removeButton}
             onPress={handleRemoveImage}
@@ -50,14 +57,14 @@ export default function ImagePicker({
           onPress={handlePickImage}
         >
           <Ionicons name="image-outline" size={48} color="#A12D2A" />
-          <Text style={styles.uploadText}>Tap to select recipe image</Text>
+          <Text style={styles.uploadText}>Tap to select image</Text>
           <Text style={styles.uploadSubtext}>JPG, PNG or GIF • Max 5MB</Text>
         </TouchableOpacity>
       )}
 
       {error && <Text style={styles.errorText}>{error}</Text>}
 
-      {imageUri && (
+      {value && (
         <TouchableOpacity style={styles.changeButton} onPress={handlePickImage}>
           <Ionicons name="camera-outline" size={16} color="#A12D2A" />
           <Text style={styles.changeButtonText}>Change Image</Text>

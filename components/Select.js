@@ -13,7 +13,7 @@ export default function Select({
   label,
   options,
   value,
-  onSelect,
+  onValueChange,
   placeholder,
   error,
   containerStyle,
@@ -66,7 +66,7 @@ export default function Select({
                     value === option.value && styles.selectedOption,
                   ]}
                   onPress={() => {
-                    onSelect(option.value);
+                    if (onValueChange) onValueChange(option.value);
                     setIsOpen(false);
                   }}
                 >

@@ -1,14 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { doc, getDoc, setDoc, updateDoc, updatePassword } from "firebase/auth";
+import { updatePassword } from "firebase/auth";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  DatePickerAndroid,
   Keyboard,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -21,6 +20,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "../components/AppHeader";
 import AppLayout from "../components/AppLayout";
+import DatePicker from "../components/DatePicker";
+import ImagePicker from "../components/ImagePicker";
 import { auth, db } from "../firebaseConfig";
 import { useColors, useTheme } from "../hooks/useTheme";
 
@@ -34,9 +35,9 @@ export default function SettingsScreen() {
   const [formData, setFormData] = useState({
     username: "",
     email: "",
-    age: "",
     sex: "",
     birthday: "", // Format: YYYY-MM-DD
+    profilePicture: "",
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -48,7 +49,6 @@ export default function SettingsScreen() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
 
@@ -68,9 +68,9 @@ export default function SettingsScreen() {
           setFormData({
             username: userData.displayName || "",
             email: currentUser.email || "",
-            age: userData.age ? String(userData.age) : "",
             sex: userData.sex || "",
             birthday: userData.birthday || "",
+            profilePicture: userData.profilePicture || "",
           });
         } else {
           setFormData((prev) => ({
@@ -90,45 +90,9 @@ export default function SettingsScreen() {
     loadUserData();
   }, [currentUser]);
 
-  const handleDatePicker = async () => {
-    if (Platform.OS === "android" && DatePickerAndroid) {
-      try {
-        const { action, year, month, day } = await DatePickerAndroid.open({
-          date: formData.birthday ? new Date(formData.birthday) : new Date(),
-        });
-
-        if (action !== DatePickerAndroid.dismissedAction) {
-          const selectedDate = `${year}-${String(month + 1).padStart(
-            2,
-            "0"
-          )}-${String(day).padStart(2, "0")}`;
-          setFormData((prev) => ({
-            ...prev,
-            birthday: selectedDate,
-          }));
-        }
-      } catch ({ code, message }) {
-        console.log("Error selecting date:", message);
-      }
-    } else {
-      // iOS or fallback - show modal with simple date picker UI
-      setShowDatePicker(true);
-    }
-  };
-
   const handleSave = async () => {
     if (!formData.username.trim()) {
       Alert.alert("Validation Error", "Please enter your username");
-      return;
-    }
-
-    if (
-      formData.age &&
-      (isNaN(formData.age) ||
-        parseInt(formData.age) < 0 ||
-        parseInt(formData.age) > 150)
-    ) {
-      Alert.alert("Validation Error", "Please enter a valid age (0-150)");
       return;
     }
 
@@ -141,15 +105,36 @@ export default function SettingsScreen() {
       };
 
       // Only include optional fields if they have values
-      if (formData.age) {
-        updateData.age = parseInt(formData.age);
-      }
       if (formData.sex) {
         updateData.sex = formData.sex;
       }
       if (formData.birthday) {
         updateData.birthday = formData.birthday;
       }
+
+      let profileUrl = formData.profilePicture;
+      if (profileUrl && profileUrl.startsWith("file://")) {
+        try {
+          const blob = {
+            uri: profileUrl,
+            type: "image/jpeg",
+            name: `profile-${Date.now()}.jpg`,
+          };
+          const fd = new FormData();
+          fd.append("file", blob);
+          fd.append("upload_preset", "recipe_book_mobile");
+          fd.append("folder", `profiles/${currentUser.uid}`);
+          const resp = await fetch(
+            "https://api.cloudinary.com/v1_1/dubvssmrp/image/upload",
+            { method: "POST", body: fd, headers: { Accept: "application/json" } }
+          );
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.secure_url) profileUrl = data.secure_url;
+          }
+        } catch {}
+      }
+      if (profileUrl) updateData.profilePicture = profileUrl;
 
       // Check if document exists
       const userDocSnap = await getDoc(userDocRef);
@@ -258,6 +243,16 @@ export default function SettingsScreen() {
           >
             {/* Form */}
             <View style={styles.formContainer}>
+              <ImagePicker
+                label="Profile Picture"
+                value={formData.profilePicture}
+                aspect={[1, 1]}
+                quality={0.9}
+                minSize={300}
+                onChange={(uri) =>
+                  setFormData((prev) => ({ ...prev, profilePicture: uri }))
+                }
+              />
               {/* Username */}
               <View style={styles.formGroup}>
                 <Text style={[styles.label, { color: colors.textPrimary }]}>
@@ -348,22 +343,6 @@ export default function SettingsScreen() {
                 </Text>
               </View>
 
-              {/* Age */}
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Age</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your age"
-                  placeholderTextColor="#AAA"
-                  value={formData.age}
-                  onChangeText={(text) =>
-                    setFormData((prev) => ({ ...prev, age: text }))
-                  }
-                  keyboardType="numeric"
-                  maxLength={3}
-                />
-              </View>
-
               {/* Sex/Gender */}
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Gender</Text>
@@ -397,17 +376,14 @@ export default function SettingsScreen() {
 
               {/* Birthday */}
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Birthday</Text>
-                <TouchableOpacity
-                  style={styles.datePickerButton}
-                  onPress={handleDatePicker}
-                >
-                  <Ionicons name="calendar-outline" size={20} color="#A12D2A" />
-                  <Text style={styles.datePickerText}>
-                    {formData.birthday || "Select your birthday"}
-                  </Text>
-                </TouchableOpacity>
-                <Text style={styles.helperText}>Format: YYYY-MM-DD</Text>
+                <DatePicker
+                  label="Birthday"
+                  value={formData.birthday}
+                  onChange={(value) =>
+                    setFormData((prev) => ({ ...prev, birthday: value }))
+                  }
+                  placeholder="Select your birthday"
+                />
               </View>
 
               {/* Password Change Section */}
@@ -572,40 +548,6 @@ export default function SettingsScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </TouchableWithoutFeedback>
-
-      {/* Date Picker Modal - iOS & Fallback */}
-      <Modal visible={showDatePicker} transparent animationType="slide">
-        <View style={styles.datePickerModal}>
-          <View style={styles.datePickerHeader}>
-            <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-              <Text style={styles.datePickerCancel}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.datePickerTitle}>Select Date</Text>
-            <TouchableOpacity
-              onPress={() => {
-                setShowDatePicker(false);
-              }}
-            >
-              <Text style={styles.datePickerDone}>Done</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.datePickerInputWrapper}>
-            <Text style={styles.datePickerLabel}>Enter date (YYYY-MM-DD)</Text>
-            <TextInput
-              style={styles.datePickerInput}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#AAA"
-              value={formData.birthday}
-              onChangeText={(text) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  birthday: text,
-                }))
-              }
-            />
-          </View>
-        </View>
-      </Modal>
     </AppLayout>
   );
 }
@@ -747,71 +689,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#A12D2A",
   },
   radioLabel: {
-    fontSize: 16,
-    color: "#1A1A1A",
-  },
-  // Date Picker Styles
-  datePickerButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    backgroundColor: "#FFF",
-  },
-  datePickerText: {
-    marginLeft: 10,
-    fontSize: 16,
-    color: "#1A1A1A",
-  },
-  datePickerModal: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.3)",
-  },
-  datePickerHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#FFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#EEE",
-  },
-  datePickerTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1A1A1A",
-  },
-  datePickerCancel: {
-    fontSize: 14,
-    color: "#999",
-  },
-  datePickerDone: {
-    fontSize: 14,
-    color: "#A12D2A",
-    fontWeight: "600",
-  },
-  datePickerInputWrapper: {
-    backgroundColor: "#FFF",
-    padding: 20,
-    paddingBottom: 30,
-  },
-  datePickerLabel: {
-    fontSize: 14,
-    color: "#666",
-    marginBottom: 12,
-    fontWeight: "500",
-  },
-  datePickerInput: {
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
     fontSize: 16,
     color: "#1A1A1A",
   },

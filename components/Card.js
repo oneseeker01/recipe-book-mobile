@@ -12,7 +12,7 @@ import { StyleSheet, View } from "react-native";
 export default function Card({
   children,
   style = {},
-  padding = 16,
+  padding = 12,
   variant = "elevated",
 }) {
   return (

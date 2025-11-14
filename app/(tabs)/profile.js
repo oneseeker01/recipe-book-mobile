@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,6 +11,8 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Image,
+  PixelRatio,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "../../components/AppHeader";
@@ -24,95 +27,114 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const currentUser = auth.currentUser;
 
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (!currentUser) {
-        // No user logged in - show login prompt
+  const AVATAR_SIZE = 100;
+  const getOptimizedAvatarUri = (url, sizeDp) => {
+    try {
+      const root = "res.cloudinary.com/dubvssmrp/image/upload/";
+      const i = url.indexOf(root);
+      if (i === -1) return url;
+      const base = url.slice(0, i + root.length);
+      const rest = url.slice(i + root.length);
+      if (rest.startsWith("c_")) return url;
+      const targetPx = Math.ceil(sizeDp * PixelRatio.get());
+      const t = `c_fill,g_face,q_auto,f_auto,w_${targetPx},h_${targetPx}`;
+      return `${base}${t}/${rest}`;
+    } catch {
+      return url;
+    }
+  };
+
+  const fetchUserProfile = useCallback(async () => {
+    if (!currentUser) {
+      // No user logged in - show login prompt
+      setUser({
+        uid: "guest",
+        email: "Not logged in",
+        displayName: "Please Login",
+        photoURL: "",
+        bio: "Please login to view your profile",
+        totalRecipes: 0,
+        isGuest: true,
+      });
+      setIsUserAdmin(false);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const userDocRef = doc(db, "users", currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (userDocSnap.exists()) {
+        const data = userDocSnap.data();
         setUser({
-          uid: "guest",
-          email: "Not logged in",
-          displayName: "Please Login",
-          photoURL: "",
-          bio: "Please login to view your profile",
-          totalRecipes: 0,
-          totalLikes: 0,
-          isGuest: true,
+          uid: currentUser.uid,
+          ...data,
+          // Provide default values for display
+          displayName:
+            data.displayName || currentUser.displayName || "Guest User",
+          email: data.email || currentUser.email,
+          photoURL: data.photoURL || currentUser.photoURL,
+          bio: data.bio || "",
+          totalRecipes: data.totalRecipes || 0,
+          isGuest: data.isGuest || false,
         });
-        setIsUserAdmin(false);
-        setLoading(false);
-        return;
-      }
 
-      try {
-        const userDocRef = doc(db, "users", currentUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          const data = userDocSnap.data();
-          setUser({
-            uid: currentUser.uid,
-            ...data,
-            // Provide default values for display
-            displayName:
-              data.displayName || currentUser.displayName || "Guest User",
-            email: data.email || currentUser.email,
-            photoURL: data.photoURL || currentUser.photoURL,
-            bio: data.bio || "",
-            totalRecipes: data.totalRecipes || 0,
-            totalLikes: data.totalLikes || 0,
-            isGuest: data.isGuest || false,
-          });
-
-          // Check if user is admin (skip for guest users)
-          if (!data.isGuest) {
-            try {
-              const adminStatus = await isAdmin(currentUser);
-              setIsUserAdmin(adminStatus);
-            } catch (error) {
-              console.log("Admin check failed:", error);
-              setIsUserAdmin(false);
-            }
-          } else {
+        // Check if user is admin (skip for guest users)
+        if (!data.isGuest) {
+          try {
+            const adminStatus = await isAdmin(currentUser);
+            setIsUserAdmin(adminStatus);
+          } catch (error) {
+            console.log("Admin check failed:", error);
             setIsUserAdmin(false);
           }
         } else {
-          // Create basic user object if no document exists
-          const isGuestUser = currentUser.isAnonymous || !currentUser.email;
-          setUser({
-            uid: currentUser.uid,
-            email: isGuestUser ? "guest@recipebook.app" : currentUser.email,
-            displayName: isGuestUser
-              ? "Guest User"
-              : currentUser.displayName || "User",
-            photoURL: currentUser.photoURL,
-            bio: isGuestUser ? "Welcome! Sign up to save your favorites." : "",
-            totalRecipes: 0,
-            totalLikes: 0,
-            isGuest: isGuestUser,
-          });
           setIsUserAdmin(false);
         }
-      } catch (error) {
-        console.error("Error fetching user profile:", error);
-        // Still provide basic user info on error
+      } else {
+        // Create basic user object if no document exists
+        const isGuestUser = currentUser.isAnonymous || !currentUser.email;
         setUser({
           uid: currentUser.uid,
-          email: currentUser.email || "Unknown",
-          displayName: currentUser.displayName || "User",
-          photoURL: currentUser.photoURL || "",
-          bio: "Profile temporarily unavailable",
+          email: isGuestUser ? "guest@recipebook.app" : currentUser.email,
+          displayName: isGuestUser
+            ? "Guest User"
+            : currentUser.displayName || "User",
+          photoURL: currentUser.photoURL,
+          bio: isGuestUser ? "Welcome! Sign up to save your favorites." : "",
           totalRecipes: 0,
-          totalLikes: 0,
-          isGuest: currentUser.isAnonymous || false,
+          isGuest: isGuestUser,
         });
         setIsUserAdmin(false);
-      } finally {
-        setLoading(false);
       }
-    };
-
-    fetchUserProfile();
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      // Still provide basic user info on error
+      setUser({
+        uid: currentUser.uid,
+        email: currentUser.email || "Unknown",
+        displayName: currentUser.displayName || "User",
+        photoURL: currentUser.photoURL || "",
+        bio: "Profile temporarily unavailable",
+        totalRecipes: 0,
+        isGuest: currentUser.isAnonymous || false,
+      });
+      setIsUserAdmin(false);
+    } finally {
+      setLoading(false);
+    }
   }, [currentUser]);
+
+  useEffect(() => {
+    fetchUserProfile();
+  }, [fetchUserProfile]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchUserProfile();
+    }, [fetchUserProfile])
+  );
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
@@ -183,7 +205,15 @@ export default function ProfileScreen() {
       <View style={styles.profileCard}>
         {/* Avatar */}
         <View style={styles.avatarContainer}>
-          {user.photoURL ? (
+          {user.profilePicture ? (
+            <View style={styles.avatarWrapper}>
+              <Image
+                source={{ uri: getOptimizedAvatarUri(user.profilePicture, AVATAR_SIZE) }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            </View>
+          ) : user.photoURL ? (
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
                 {(user.displayName || "U")[0]}
@@ -209,11 +239,6 @@ export default function ProfileScreen() {
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{user.totalRecipes}</Text>
             <Text style={styles.statLabel}>Recipes</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{user.totalLikes}</Text>
-            <Text style={styles.statLabel}>Likes</Text>
           </View>
         </View>
       </View>
@@ -339,6 +364,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#A12D2A",
     justifyContent: "center",
     alignItems: "center",
+  },
+  avatarWrapper: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    overflow: "hidden",
+    backgroundColor: "transparent",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 50,
   },
   avatarPlaceholder: {
     backgroundColor: "transparent",
@@ -502,5 +539,28 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#FAFAFA",
+  },
+  modalScrollView: {
+    flex: 1,
+  },
+  modalContent: {
+    padding: 20,
+    gap: 16,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 20,
+  },
+  cancelButton: {
+    flex: 1,
+  },
+  saveButton: {
+    flex: 1,
   },
 });

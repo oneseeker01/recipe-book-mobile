@@ -18,6 +18,7 @@ import {
   Modal,
   Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -82,20 +83,20 @@ export default function GeminiScreen() {
           {
             id: "welcome-1",
             role: "ai",
-            text: "Welcome to Recipe Genie! Ask me a cooking question or request a recipe.",
+            text: "Welcome to Chef Gemini! Ask me a cooking question or request a recipe.",
           },
         ]);
       }
     } catch (err) {
       console.warn("Failed to load chat history:", err);
       // Even on error, show welcome message
-      setMessages([
-        {
-          id: "welcome-1",
-          role: "ai",
-          text: "Welcome to Recipe Genie! Ask me a cooking question or request a recipe.",
-        },
-      ]);
+        setMessages([
+          {
+            id: "welcome-1",
+            role: "ai",
+            text: "Welcome to Chef Gemini! Ask me a cooking question or request a recipe.",
+          },
+        ]);
     }
   };
 
@@ -163,20 +164,14 @@ export default function GeminiScreen() {
       await persistMessages(userMessage, aiText);
     } catch (error) {
       console.error("[Gemini] Error sending message:", error);
-      const errorMessage = {
-        id: Date.now().toString() + "-error",
-        role: "ai",
-        text: `Sorry, I encountered an error: ${
-          error.message || "Unable to process your request"
-        }. Please try again.`,
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-      // try persisting the user message even on error
-      try {
-        await persistMessages(userMessage, null);
-      } catch (e) {
-        console.warn("Failed to persist failed message:", e);
+      let errorMessage = "Sorry, I encountered an error. Please try again.";
+      if (error.code === 503 || error.status === "UNAVAILABLE") {
+        errorMessage =
+          "The service is temporarily overloaded. Please try again in a few moments.";
+      } else if (error.message) {
+        errorMessage = `Sorry, I encountered an error: ${error.message}. Please try again.`;
       }
+      Alert.alert("Error", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -210,10 +205,17 @@ export default function GeminiScreen() {
     }
   };
 
+  useEffect(() => {
+    // Auto-scroll to bottom when new messages are added
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, [messages, loading]);
+
   const handleStartNewChat = async () => {
     Alert.alert(
       "Start New Chat?",
-      "This will clear your current chat history.",
+      "This will reset the current conversation view.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -221,23 +223,11 @@ export default function GeminiScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const u = auth.currentUser;
-              if (u) {
-                const chatDocRef = doc(
-                  db,
-                  "users",
-                  u.uid,
-                  "chatHistory",
-                  "default"
-                );
-                await setDoc(chatDocRef, { messages: [] }, { merge: true });
-              }
-              // Show welcome message
               setMessages([
                 {
                   id: "welcome-1",
                   role: "ai",
-                  text: "Welcome to Recipe Genie! Ask me a cooking question or request a recipe.",
+                  text: "Welcome to Chef Gemini! Ask me a cooking question or request a recipe.",
                 },
               ]);
             } catch (err) {
@@ -312,22 +302,24 @@ export default function GeminiScreen() {
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
     >
       <AppLayout
+        style={{ paddingBottom: 0 }}
         scrollable={false}
+        hasHeader={true}
         header={
           <AppHeader
-            title="Recipe Genie"
+            title="Chef Gemini"
             centered={true}
             rightActions={
               <>
                 <TouchableOpacity
                   onPress={openHistory}
-                  style={{ padding: 8, marginRight: 6 }}
+                  style={{ padding: 6, marginRight: 4 }}
                 >
                   <Ionicons name="albums-outline" size={22} color="#1A1A1A" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleStartNewChat}
-                  style={{ padding: 8 }}
+                  style={{ padding: 6 }}
                 >
                   <Ionicons name="refresh-outline" size={22} color="#1A1A1A" />
                 </TouchableOpacity>
@@ -338,28 +330,28 @@ export default function GeminiScreen() {
       >
         <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
           <View style={styles.innerContainer}>
-            <FlatList
+            <ScrollView
               ref={flatListRef}
-              data={messages}
-              renderItem={renderMessage}
-              keyExtractor={(item) => item.id}
+              style={styles.flatList}
               contentContainerStyle={styles.messageList}
               keyboardShouldPersistTaps="handled"
-              scrollEnabled={true}
-              style={styles.flatList}
-              onContentSizeChange={scrollToEndIfNeeded}
+              keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={true}
               onScroll={onScroll}
-              ListFooterComponent={() =>
-                loading ? (
-                  <View style={styles.typingIndicator}>
-                    <ActivityIndicator size="small" color="#666" />
-                    <Text style={styles.typingText}>
-                      Recipe Genie is thinking...
-                    </Text>
-                  </View>
-                ) : null
-              }
-            />
+              scrollEventThrottle={16}
+            >
+              {messages.map((item) => (
+                <View key={item.id}>{renderMessage({ item })}</View>
+              ))}
+              {loading && (
+                <View style={styles.typingIndicator}>
+                  <ActivityIndicator size="small" color="#666" />
+                  <Text style={styles.typingText}>
+                    Chef Gemini is thinking...
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
 
             {/* Jump to latest button when user scrolled up */}
             {!isAtBottomRef.current && (
@@ -470,7 +462,8 @@ const styles = StyleSheet.create({
   },
   messageList: {
     paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingTop: 0,
+    paddingBottom: 10,
     flexGrow: 1,
   },
   flatList: {
@@ -502,12 +495,12 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: "row",
+    justifyContent: "center",
     alignItems: "center",
-    padding: 10,
-    paddingBottom: Platform.OS === "android" ? 10 : 0,
-    borderTopWidth: 1,
-    borderTopColor: "#DDD",
-    backgroundColor: "#FFF",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: 12,
+    backgroundColor: "transparent",
   },
   input: {
     flex: 1,

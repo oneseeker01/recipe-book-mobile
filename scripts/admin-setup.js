@@ -62,6 +62,7 @@ async function createAdminUser(email, password, displayName) {
         emailVerified: true,
         role: "admin",
         isAdmin: true,
+        isChef: true, // Admin users are also chefs to appear on home screen
         isGuest: false,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -85,6 +86,7 @@ async function grantAdminPrivileges(userId) {
     await db.collection("users").doc(userId).update({
       role: "admin",
       isAdmin: true,
+      isChef: true, // Admin users are also chefs to appear on home screen
       updatedAt: new Date(),
     });
 

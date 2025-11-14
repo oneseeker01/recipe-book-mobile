@@ -19,8 +19,7 @@ export default function DebugUpdateScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const md = await Updates.getUpdateMetadataAsync();
-        setMetadata(md || null);
+        setMetadata({ updateId: Updates.updateId ?? null });
         const ch = await Updates.checkForUpdateAsync();
         setCheck(ch || null);
       } catch (e) {

@@ -6,17 +6,11 @@ import { Image, StyleSheet, Text, View } from "react-native";
  * @param {Object} props
  * @param {string} props.name - Chef's display name
  * @param {string} props.photoURL - URL to chef's photo
+ * @param {boolean} props.showName - Whether to show the name below the avatar
  */
-export default function ChefAvatar({ name, photoURL }) {
+export default function ChefAvatar({ name, photoURL, showName = true }) {
   // Generate initials from name if no photo is available
-  const initials = name
-    ? name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
-    : "?";
+  const initials = name ? name.slice(0, 2).toUpperCase() : "?";
 
   const backgroundColor =
     photoURL === undefined
@@ -34,9 +28,11 @@ export default function ChefAvatar({ name, photoURL }) {
           <Text style={styles.initials}>{initials}</Text>
         </View>
       )}
-      <Text style={styles.name} numberOfLines={1}>
-        {name || "Unknown"}
-      </Text>
+      {showName && (
+        <Text style={styles.name} numberOfLines={1}>
+          {name || "Unknown"}
+        </Text>
+      )}
     </View>
   );
 }

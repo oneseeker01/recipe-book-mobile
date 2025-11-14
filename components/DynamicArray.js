@@ -9,16 +9,26 @@ import {
 
 export default function DynamicArray({
   label,
-  items,
+  items = [],
   onAddItem,
   onRemoveItem,
   onUpdateItem,
-  fieldLabels, // e.g., ["quantity", "unit", "name"] or ["instruction"]
-  placeholders, // corresponding placeholders
+  fieldLabels = [],
+  placeholders = [],
   error,
+  showPrice = false,
   containerStyle,
-  showPrice, // optional: show price field for ingredients
+  onItemsChange,
 }) {
+  const effectiveFieldLabels = showPrice
+    ? [...fieldLabels, "price"]
+    : fieldLabels;
+  const effectivePlaceholders = showPrice
+    ? [...placeholders, "Price"]
+    : placeholders;
+
+  const isSimpleArray = effectiveFieldLabels.length === 0;
+
   return (
     <View style={[styles.container, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
@@ -26,31 +36,26 @@ export default function DynamicArray({
       {items.map((item, index) => (
         <View key={index} style={styles.itemContainer}>
           <View style={styles.itemContent}>
-            {fieldLabels.map((field, fieldIndex) => (
+            {isSimpleArray ? (
               <TextInput
-                key={field}
-                style={[
-                  styles.input,
-                  fieldLabels.length > 1 && styles.multiInput,
-                ]}
-                placeholder={placeholders[fieldIndex]}
+                style={styles.input}
+                placeholder={placeholders[0] || ""}
                 placeholderTextColor="#CCC"
-                value={item[field] || ""}
-                onChangeText={(text) => onUpdateItem(index, field, text)}
+                value={item}
+                onChangeText={(text) => onUpdateItem(index, text)}
               />
-            ))}
-            {showPrice && (
-              <TextInput
-                style={[
-                  styles.input,
-                  fieldLabels.length > 1 && styles.multiInput,
-                ]}
-                placeholder="Price ($)"
-                placeholderTextColor="#CCC"
-                value={item.price || ""}
-                onChangeText={(text) => onUpdateItem(index, "price", text)}
-                keyboardType="decimal-pad"
-              />
+            ) : (
+              effectiveFieldLabels.map((field, fieldIndex) => (
+                <TextInput
+                  key={field}
+                  style={[styles.input, styles.multiInput]}
+                  placeholder={effectivePlaceholders[fieldIndex] || ""}
+                  placeholderTextColor="#CCC"
+                  value={item[field] || ""}
+                  onChangeText={(text) => onUpdateItem(index, field, text)}
+                  keyboardType={field === "price" ? "numeric" : "default"}
+                />
+              ))
             )}
           </View>
 

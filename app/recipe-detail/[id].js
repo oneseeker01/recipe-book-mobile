@@ -22,6 +22,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Rating } from "react-native-ratings";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "../../components/AppHeader";
 import AppLayout from "../../components/AppLayout";
@@ -278,10 +279,15 @@ export default function RecipeDetailScreen() {
             <View
               style={[
                 styles.difficultyBadge,
-                styles[`difficulty_${recipe.difficulty}`],
+                styles[`difficulty_${recipe.difficulty?.toLowerCase()}`],
               ]}
             >
-              <Text style={styles.badgeText}>{recipe.difficulty}</Text>
+              <Text style={styles.badgeText}>
+                {recipe.difficulty
+                  ? recipe.difficulty.charAt(0).toUpperCase() +
+                    recipe.difficulty.slice(1).toLowerCase()
+                  : ""}
+              </Text>
             </View>
           )}
           <TouchableOpacity
@@ -314,12 +320,17 @@ export default function RecipeDetailScreen() {
           <TouchableOpacity
             style={styles.chefContainer}
             onPress={() => {
-              if (recipe.userId) {
-                router.push(`/chef-detail/${recipe.userId}`);
+              // For admin content, chefId refers to chefs collection
+              // For user content, userId refers to users collection
+              const chefId = recipe.isAdminContent
+                ? recipe.chefId
+                : recipe.userId;
+              if (chefId) {
+                router.push(`/chef-detail/${chefId}`);
               }
             }}
           >
-            <Text style={styles.chefLabel}>Created by:</Text>
+            <Text style={styles.chefLabel}>Chef:</Text>
             <Text style={styles.chefName}>{recipe.authorName}</Text>
             <Ionicons name="chevron-forward" size={16} color="#A12D2A" />
           </TouchableOpacity>
@@ -453,7 +464,7 @@ export default function RecipeDetailScreen() {
                 Congrats, you made it, chef!
               </Text>
               <Text style={styles.modalText}>
-                You've completed all the steps! Great job following the recipe.
+                You&#39;ve completed all the steps! Great job following the recipe.
               </Text>
               <Button
                 title="Awesome!"
@@ -527,13 +538,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
   difficulty_easy: {
     backgroundColor: "rgba(76, 175, 80, 0.95)",
   },
   difficulty_normal: {
-    backgroundColor: "rgba(255, 152, 0, 0.95)",
+    backgroundColor: "rgba(255, 255, 0, 0.95)",
+  },
+  difficulty_medium: {
+    backgroundColor: "rgba(255, 255, 0, 0.95)",
   },
   difficulty_hard: {
     backgroundColor: "rgba(244, 67, 54, 0.95)",
@@ -550,7 +566,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
     justifyContent: "center",
     alignItems: "center",
     elevation: 3,

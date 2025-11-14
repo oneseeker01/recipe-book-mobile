@@ -23,6 +23,8 @@ import AppLayout from "../../components/AppLayout";
 import ChefCard from "../../components/ChefCard";
 import RecipeCard from "../../components/RecipeCard";
 import { auth, db } from "../../firebaseConfig";
+import useChefFavorites from "../../hooks/useChefFavorites";
+import { useColors } from "../../hooks/useTheme";
 
 export default function FavoritesScreen() {
   const [viewMode, setViewMode] = useState("recipes"); // "recipes" or "chefs"
@@ -32,6 +34,8 @@ export default function FavoritesScreen() {
   const [user, setUser] = useState(null);
   const router = useRouter();
   const currentUser = auth.currentUser;
+  const colors = useColors();
+  const { favoriteChefIds, loading: chefsLoading } = useChefFavorites();
 
   useEffect(() => {
     if (!currentUser) {
@@ -57,10 +61,15 @@ export default function FavoritesScreen() {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const recipes = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        const recipes = snapshot.docs.map((doc) => {
+          const recipeData = doc.data();
+          return {
+            id: doc.id,
+            ...recipeData,
+            // Add chef cuisine to recipe for display
+            cuisine: recipeData.authorCuisine || recipeData.cuisine,
+          };
+        });
         setFavoriteRecipes(recipes);
         setLoading(false);
       },
@@ -73,29 +82,73 @@ export default function FavoritesScreen() {
     return () => unsubscribe();
   }, [user]);
 
-  // Fetch favorite chefs
+  // Fetch favorite chefs using favoriteChefIds from hook
   useEffect(() => {
-    if (!user) return;
+    if (!user || chefsLoading) return;
+
+    console.log("favorites.js: favoriteChefIds:", favoriteChefIds);
 
     const fetchFavoriteChefs = async () => {
       try {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const followedChefIds = userDoc.data().following || [];
+        if (favoriteChefIds.length > 0) {
+          const fetchOne = async (chefId) => {
+            const userDoc = await getDoc(doc(db, "users", chefId));
+            if (userDoc.exists()) {
+              const data = userDoc.data();
+              return {
+                id: chefId,
+                userId: chefId,
+                displayName: data.displayName || data.name,
+                cuisine: data.cuisine || data.specialty,
+                profilePicture: data.profilePicture || data.image || data.photoURL,
+                ...data,
+              };
+            }
+            const chefDoc = await getDoc(doc(db, "chefs", chefId));
+            if (chefDoc.exists()) {
+              const data = chefDoc.data();
+              return {
+                id: chefId,
+                userId: chefId,
+                displayName: data.displayName || data.name,
+                cuisine: data.cuisine || data.specialty,
+                profilePicture: data.profilePicture || data.image || data.photoURL,
+                ...data,
+              };
+            }
+            return null;
+          };
+          const fetched = await Promise.all(favoriteChefIds.map(fetchOne));
+          const chefs = fetched.filter((c) => c);
 
-          if (followedChefIds.length > 0) {
-            const chefsPromises = followedChefIds.map((chefId) =>
-              getDoc(doc(db, "users", chefId))
-            );
-            const chefDocs = await Promise.all(chefsPromises);
-            const chefs = chefDocs
-              .filter((doc) => doc.exists())
-              .map((doc) => ({
-                userId: doc.id,
-                ...doc.data(),
-              }));
-            setFavoriteChefs(chefs);
-          }
+          console.log(
+            "favorites.js: fetched chefs:",
+            chefs.map((c) => ({
+              chefId: c.chefId,
+              name: c.name,
+              displayName: c.displayName,
+            }))
+          );
+
+          setFavoriteRecipes((prevRecipes) =>
+            prevRecipes.map((recipe) => {
+              const chef = chefs.find((c) => c.userId === recipe.userId);
+              return chef && chef.cuisine ? { ...recipe, cuisine: chef.cuisine } : recipe;
+            })
+          );
+
+          console.log(
+            "favorites.js: setting favoriteChefs:",
+            chefs.map((c) => ({
+              chefId: c.chefId,
+              name: c.name,
+              displayName: c.displayName,
+            }))
+          );
+          setFavoriteChefs(chefs);
+        } else {
+          console.log("favorites.js: no favoriteChefIds, setting empty chefs");
+          setFavoriteChefs([]);
         }
       } catch (error) {
         console.error("Error fetching favorite chefs:", error);
@@ -103,18 +156,26 @@ export default function FavoritesScreen() {
     };
 
     fetchFavoriteChefs();
-  }, [user]);
+  }, [user, favoriteChefIds, chefsLoading]);
 
   if (!user) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
         <View style={styles.loginPromptContainer}>
-          <Ionicons name="heart-dislike-outline" size={60} color="#CCC" />
-          <Text style={styles.loginPromptText}>
+          <Ionicons
+            name="heart-dislike-outline"
+            size={60}
+            color={colors.iconMuted}
+          />
+          <Text
+            style={[styles.loginPromptText, { color: colors.textSecondary }]}
+          >
             Please log in to view your favorite recipes
           </Text>
           <TouchableOpacity
-            style={styles.loginButton}
+            style={[styles.loginButton, { backgroundColor: colors.primary }]}
             onPress={() => router.push("/login")}
           >
             <Text style={styles.loginButtonText}>Go to Login</Text>
@@ -124,12 +185,16 @@ export default function FavoritesScreen() {
     );
   }
 
-  if (loading) {
+  if (loading || chefsLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#A12D2A" />
-          <Text style={styles.loadingText}>Loading favorites...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            Loading favorites...
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -147,18 +212,31 @@ export default function FavoritesScreen() {
           style={[
             styles.toggleButton,
             viewMode === "recipes" && styles.toggleButtonActive,
+            {
+              backgroundColor:
+                viewMode === "recipes" ? colors.primary : colors.backgroundCard,
+              borderColor: colors.borderPrimary,
+            },
           ]}
           onPress={() => setViewMode("recipes")}
         >
           <Ionicons
             name="restaurant"
             size={18}
-            color={viewMode === "recipes" ? "#FFF" : "#A12D2A"}
+            color={
+              viewMode === "recipes" ? colors.iconInverse : colors.iconPrimary
+            }
           />
           <Text
             style={[
               styles.toggleButtonText,
               viewMode === "recipes" && styles.toggleButtonTextActive,
+              {
+                color:
+                  viewMode === "recipes"
+                    ? colors.textInverse
+                    : colors.textPrimary,
+              },
             ]}
           >
             Recipes
@@ -168,18 +246,31 @@ export default function FavoritesScreen() {
           style={[
             styles.toggleButton,
             viewMode === "chefs" && styles.toggleButtonActive,
+            {
+              backgroundColor:
+                viewMode === "chefs" ? colors.primary : colors.backgroundCard,
+              borderColor: colors.borderPrimary,
+            },
           ]}
           onPress={() => setViewMode("chefs")}
         >
           <Ionicons
             name="people"
             size={18}
-            color={viewMode === "chefs" ? "#FFF" : "#A12D2A"}
+            color={
+              viewMode === "chefs" ? colors.iconInverse : colors.iconPrimary
+            }
           />
           <Text
             style={[
               styles.toggleButtonText,
               viewMode === "chefs" && styles.toggleButtonTextActive,
+              {
+                color:
+                  viewMode === "chefs"
+                    ? colors.textInverse
+                    : colors.textPrimary,
+              },
             ]}
           >
             Chefs
@@ -188,9 +279,15 @@ export default function FavoritesScreen() {
       </View>
 
       {/* Favorites List */}
+      {console.log(
+        "favorites.js: rendering FlatList, viewMode:",
+        viewMode,
+        "data length:",
+        (viewMode === "recipes" ? favoriteRecipes : favoriteChefs).length
+      )}
       <FlatList
         data={viewMode === "recipes" ? favoriteRecipes : favoriteChefs}
-        keyExtractor={(item) => item.id || item.userId}
+        keyExtractor={(item) => item.id || item.chefId}
         renderItem={({ item }) =>
           viewMode === "recipes" ? (
             <RecipeCard
@@ -198,29 +295,43 @@ export default function FavoritesScreen() {
               onPress={() => router.push(`/recipe-detail/${item.id}`)}
             />
           ) : (
-            <ChefCard chef={item} />
+            <ChefCard chef={item} showGender={false} />
           )
         }
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="heart-outline" size={60} color="#CCC" />
-            <Text style={styles.emptyText}>
+            <Ionicons name="heart-outline" size={60} color={colors.iconMuted} />
+            <Text style={[styles.emptyText, { color: colors.textPrimary }]}>
               {viewMode === "recipes"
                 ? "No favorite recipes yet"
                 : "No favorite chefs yet"}
             </Text>
-            <Text style={styles.emptySubtext}>
+            <Text
+              style={[styles.emptySubtext, { color: colors.textSecondary }]}
+            >
               {viewMode === "recipes"
                 ? "Tap the heart icon on recipes to save them here"
                 : "Follow chefs to see them here"}
             </Text>
             <TouchableOpacity
-              style={styles.exploreButton}
+              style={[
+                styles.exploreButton,
+                { backgroundColor: colors.primary },
+              ]}
               onPress={() => router.push("/(tabs)/home")}
             >
-              <Ionicons name="compass-outline" size={18} color="#FFF" />
-              <Text style={styles.exploreButtonText}>
+              <Ionicons
+                name="compass-outline"
+                size={18}
+                color={colors.iconInverse}
+              />
+              <Text
+                style={[
+                  styles.exploreButtonText,
+                  { color: colors.textInverse },
+                ]}
+              >
                 Explore {viewMode === "recipes" ? "Recipes" : "Chefs"}
               </Text>
             </TouchableOpacity>
@@ -235,7 +346,6 @@ export default function FavoritesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FAFAFA",
   },
   loadingContainer: {
     flex: 1,
@@ -245,7 +355,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: "#666",
   },
   loginPromptContainer: {
     flex: 1,
@@ -255,13 +364,11 @@ const styles = StyleSheet.create({
   },
   loginPromptText: {
     fontSize: 16,
-    color: "#666",
     marginTop: 16,
     marginBottom: 24,
     textAlign: "center",
   },
   loginButton: {
-    backgroundColor: "#A12D2A",
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -284,18 +391,15 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#1A1A1A",
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: "#999",
     marginTop: 8,
     textAlign: "center",
   },
   exploreButton: {
     marginTop: 24,
-    backgroundColor: "#A12D2A",
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -304,7 +408,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   exploreButtonText: {
-    color: "#FFF",
     fontSize: 16,
     fontWeight: "bold",
   },
@@ -323,17 +426,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: "#FFF",
     borderWidth: 1,
-    borderColor: "#E0E0E0",
   },
   toggleButtonActive: {
-    backgroundColor: "#A12D2A",
-    borderColor: "#A12D2A",
+    borderColor: "transparent",
   },
   toggleButtonText: {
     fontSize: 14,
-    color: "#A12D2A",
     fontWeight: "600",
   },
   toggleButtonTextActive: {

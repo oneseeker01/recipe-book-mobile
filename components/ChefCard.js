@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useColors } from "../hooks/useTheme";
 
 /**
  * ChefCard component for displaying chef profile in a list
@@ -8,8 +9,9 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
  * @param {Object} chef - Chef data object
  * @param {function} onPress - Callback when card is tapped
  */
-export default function ChefCard({ chef, onPress }) {
+export default function ChefCard({ chef, onPress, showGender = true }) {
   const router = useRouter();
+  const colors = useColors();
 
   if (!chef) return null;
 
@@ -23,10 +25,23 @@ export default function ChefCard({ chef, onPress }) {
 
   const followerCount = chef.followers?.length || chef.followersCount || 0;
   const recipeCount = chef.myRecipes?.length || chef.totalRecipes || 0;
+  const avatarUri = chef.profilePicture || chef.photoURL || chef.image;
+  const cuisineLabel = typeof chef.cuisine === "string"
+    ? chef.cuisine
+        .split(" ")
+        .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : ""))
+        .join(" ")
+    : chef.cuisine;
 
   return (
     <TouchableOpacity
-      style={styles.container}
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.backgroundCard,
+          shadowColor: colors.shadow,
+        },
+      ]}
       onPress={handleCardPress}
       activeOpacity={0.9}
     >
@@ -34,39 +49,86 @@ export default function ChefCard({ chef, onPress }) {
       <View style={styles.header}>
         {/* Avatar */}
         <View style={styles.avatarContainer}>
-          {chef.profilePicture || chef.photoURL ? (
-            <Image
-              source={{ uri: chef.profilePicture || chef.photoURL }}
-              style={styles.avatar}
-            />
+          {avatarUri ? (
+            <Image source={{ uri: avatarUri }} style={styles.avatar} />
           ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Ionicons name="person" size={36} color="#A12D2A" />
+            <View
+              style={[
+                styles.avatarPlaceholder,
+                { borderColor: colors.borderSecondary },
+              ]}
+            >
+              <Ionicons name="person" size={36} color={colors.primary} />
             </View>
           )}
         </View>
 
         {/* Chef Info */}
         <View style={styles.chefInfo}>
-          <Text style={styles.name} numberOfLines={1}>
+          <Text
+            style={[styles.name, { color: colors.textPrimary }]}
+            numberOfLines={1}
+          >
             {chef.displayName || chef.name || "Anonymous Chef"}
           </Text>
 
           {chef.cuisine && (
-            <View style={styles.cuisineBadge}>
-              <Ionicons name="restaurant-outline" size={12} color="#A12D2A" />
-              <Text style={styles.cuisineText}>{chef.cuisine}</Text>
+            <View
+              style={[
+                styles.cuisineBadge,
+                {
+                  backgroundColor: colors.primary,
+                  borderColor: colors.primary,
+                },
+              ]}
+            >
+              <Ionicons name="restaurant-outline" size={12} color="#FFFFFF" />
+              <Text style={[styles.cuisineText, { color: "#FFFFFF" }]}>
+                {cuisineLabel}
+              </Text>
             </View>
           )}
 
           {/* Personal Info */}
           <View style={styles.personalInfo}>
             {chef.age && (
-              <Text style={styles.personalText}>Age: {chef.age}</Text>
+              <Text
+                style={[
+                  styles.personalText,
+                  {
+                    color: colors.textSecondary,
+                    backgroundColor: colors.backgroundInput,
+                  },
+                ]}
+              >
+                Age: {chef.age}
+              </Text>
             )}
-            {chef.sex && <Text style={styles.personalText}>{chef.sex}</Text>}
+            {showGender && chef.sex && (
+              <Text
+                style={[
+                  styles.personalText,
+                  {
+                    color: colors.textSecondary,
+                    backgroundColor: colors.backgroundInput,
+                  },
+                ]}
+              >
+                {chef.sex}
+              </Text>
+            )}
             {chef.birthday && (
-              <Text style={styles.personalText}>🎂 {chef.birthday}</Text>
+              <Text
+                style={[
+                  styles.personalText,
+                  {
+                    color: colors.textSecondary,
+                    backgroundColor: colors.backgroundInput,
+                  },
+                ]}
+              >
+                🎂 {chef.birthday}
+              </Text>
             )}
           </View>
         </View>
@@ -74,31 +136,36 @@ export default function ChefCard({ chef, onPress }) {
 
       {/* Bio Section */}
       {chef.bio && (
-        <View style={styles.bioContainer}>
-          <Text style={styles.bio} numberOfLines={2}>
+        <View
+          style={[
+            styles.bioContainer,
+            { backgroundColor: colors.backgroundSecondary },
+          ]}
+        >
+          <Text
+            style={[styles.bio, { color: colors.textSecondary }]}
+            numberOfLines={2}
+          >
             {chef.bio}
           </Text>
         </View>
       )}
 
       {/* Stats Section */}
-      <View style={styles.statsContainer}>
+      <View
+        style={[
+          styles.statsContainer,
+          { backgroundColor: colors.backgroundSecondary },
+        ]}
+      >
         <View style={styles.statItem}>
-          <Ionicons name="book-outline" size={16} color="#A12D2A" />
-          <Text style={styles.statText}>{recipeCount}</Text>
-          <Text style={styles.statLabel}>Recipes</Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Ionicons name="people-outline" size={16} color="#A12D2A" />
-          <Text style={styles.statText}>{followerCount}</Text>
-          <Text style={styles.statLabel}>Followers</Text>
-        </View>
-
-        <View style={styles.statItem}>
-          <Ionicons name="heart-outline" size={16} color="#A12D2A" />
-          <Text style={styles.statText}>{chef.totalLikes || 0}</Text>
-          <Text style={styles.statLabel}>Likes</Text>
+          <Ionicons name="book-outline" size={16} color={colors.primary} />
+          <Text style={[styles.statText, { color: colors.textPrimary }]}>
+            {recipeCount}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+            Recipes
+          </Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -107,15 +174,13 @@ export default function ChefCard({ chef, onPress }) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#FFF",
-    borderRadius: 20,
-    marginBottom: 20,
-    padding: 20,
-    shadowColor: "#A12D2A",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    borderRadius: 16,
+    marginBottom: 12,
+    padding: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   header: {
     flexDirection: "row",
@@ -126,20 +191,19 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: "#F0F0F0",
   },
   avatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: "#F9F9F9",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 3,
-    borderColor: "#E8E8E8",
+    borderWidth: 2,
   },
   chefInfo: {
     flex: 1,
@@ -147,7 +211,6 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#1A1A1A",
     marginBottom: 8,
     lineHeight: 24,
   },
@@ -155,18 +218,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#FFF5F0",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 15,
     marginBottom: 8,
     alignSelf: "flex-start",
     borderWidth: 1,
-    borderColor: "#FFE0D0",
   },
   cuisineText: {
     fontSize: 12,
-    color: "#A12D2A",
     fontWeight: "600",
   },
   personalInfo: {
@@ -176,28 +236,23 @@ const styles = StyleSheet.create({
   },
   personalText: {
     fontSize: 11,
-    color: "#666",
-    backgroundColor: "#F0F0F0",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
   },
   bioContainer: {
-    backgroundColor: "#FAFAFA",
     padding: 12,
     borderRadius: 12,
     marginBottom: 16,
   },
   bio: {
     fontSize: 13,
-    color: "#666",
     lineHeight: 18,
   },
   statsContainer: {
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    backgroundColor: "#FAFAFA",
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 8,
@@ -209,11 +264,9 @@ const styles = StyleSheet.create({
   statText: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#1A1A1A",
   },
   statLabel: {
     fontSize: 10,
-    color: "#666",
     fontWeight: "500",
   },
 });

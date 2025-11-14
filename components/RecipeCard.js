@@ -61,23 +61,33 @@ export default function RecipeCard({
             <View
               style={[
                 styles.difficultyBadge,
-                recipe.difficulty === "easy"
+                recipe.difficulty?.toLowerCase() === "easy"
                   ? styles.easyBadge
-                  : recipe.difficulty === "medium" ||
-                    recipe.difficulty === "normal"
+                  : recipe.difficulty?.toLowerCase() === "medium" ||
+                    recipe.difficulty?.toLowerCase() === "normal"
                   ? styles.mediumBadge
-                  : recipe.difficulty === "hard"
+                  : recipe.difficulty?.toLowerCase() === "hard"
                   ? styles.hardBadge
                   : styles.expertBadge,
               ]}
             >
-              <Text style={styles.difficultyText}>{recipe.difficulty}</Text>
+              <Text style={styles.difficultyText}>
+                {recipe.difficulty
+                  ? recipe.difficulty.charAt(0).toUpperCase() +
+                    recipe.difficulty.slice(1).toLowerCase()
+                  : ""}
+              </Text>
             </View>
           )}
 
           {recipe.category && (
             <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{recipe.category}</Text>
+              <Text style={styles.categoryText}>
+                {recipe.category
+                  ? recipe.category.charAt(0).toUpperCase() +
+                    recipe.category.slice(1).toLowerCase()
+                  : ""}
+              </Text>
             </View>
           )}
         </View>
@@ -114,6 +124,13 @@ export default function RecipeCard({
         </Text>
 
         <Text style={styles.author}>👨‍🍳 {recipe.authorName}</Text>
+
+        {recipe.cuisine && (
+          <View style={styles.cuisineBadge}>
+            <Ionicons name="restaurant-outline" size={12} color="#FFFFFF" />
+            <Text style={styles.cuisineText}>{recipe.cuisine}</Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -122,19 +139,19 @@ export default function RecipeCard({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: "#FFF",
-    borderRadius: 20,
-    marginBottom: 20,
+    borderRadius: 16,
+    marginBottom: 12,
     overflow: "hidden",
     shadowColor: "#A12D2A",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   imageContainer: {
     position: "relative",
     width: "100%",
-    height: 180,
+    height: 140,
   },
   image: {
     width: "100%",
@@ -161,10 +178,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
   easyBadge: { backgroundColor: "rgba(76, 175, 80, 0.9)" },
-  mediumBadge: { backgroundColor: "rgba(255, 152, 0, 0.9)" },
+  mediumBadge: { backgroundColor: "rgba(255, 255, 0, 0.9)" },
   hardBadge: { backgroundColor: "rgba(244, 67, 54, 0.9)" },
   expertBadge: { backgroundColor: "rgba(156, 39, 176, 0.9)" },
   difficultyText: {
@@ -176,10 +195,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    backgroundColor: "#A12D2A",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
   categoryText: {
-    color: "#A12D2A",
+    color: "#FFF",
     fontSize: 10,
     fontWeight: "600",
   },
@@ -219,5 +240,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#A12D2A",
     fontWeight: "600",
+  },
+  cuisineBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+    marginTop: 8,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    backgroundColor: "#A12D2A",
+    borderColor: "#A12D2A",
+  },
+  cuisineText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
 });
